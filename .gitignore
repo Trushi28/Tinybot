@@ -1,0 +1,6 @@
+target/
+bot.bin
+memory.txt
+learned.txt
+flow.txt
+Cargo.lock

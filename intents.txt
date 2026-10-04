@@ -1,0 +1,1122 @@
+# Format: [tag], then example phrases (one per line), then bot replies starting with ">"
+# Edit freely, then run: cargo run --release -- train
+# Placeholders: {name} {time} {date} {weekday} {coin} {dice} {rand} {mood} {level} {title} {xp} {streak} {msgs} {dex} {dex_total}
+# ">@prev_tag reply" = only used when the previous intent was prev_tag; "=tag" borrows another intent's replies
+
+[greeting]
+hi
+hello
+hey
+hey there
+hello there
+good morning
+good evening
+yo
+howdy
+hiya
+sup
+greetings
+hey bot
+hello bot
+hi there
+hey whats up
+good afternoon
+hello friend
+hi how are you
+well hello
+hola
+heya
+whats good
+morning
+evening
+good day
+hey hey
+hello there bot
+hi bot
+hello again
+hey you
+greetings friend
+> Hey! What's on your mind?
+> Hello! How can I help?
+> Hi there! Good to see you.
+>@greeting Hello again! Still here.
+> {greet}, {name}! What's on your mind?
+> {greet}! How can I help?
+> Hey {name}, good to see you.
+>@greeting Hello again! Still here.
+
+[goodbye]
+bye
+goodbye
+see you later
+see ya
+i have to go
+gotta go
+talk to you later
+catch you later
+good night
+im leaving now
+farewell
+bye bye
+im going now
+see you tomorrow
+i am leaving
+later
+time to go
+ill be back later
+have a good night
+ok bye
+signing off
+im off
+talk later
+cya
+bye for now
+night night
+im heading out
+goodnight
+until next time
+see you soon
+i am off now
+> Bye {name}! Talk soon.
+> See you later!
+> Goodbye! It was nice chatting.
+> Have a good {daypart}, {name}!
+> Take care this {daypart}!
+> Bye for now, {name}.
+
+[thanks]
+thanks
+thank you
+thx
+thanks a lot
+thank you so much
+much appreciated
+cheers
+that helps thanks
+ty
+thank you very much
+thanks for the help
+i appreciate it
+thanks bot
+great thanks
+thank u
+many thanks
+perfect thank you
+thanks buddy
+thank you kindly
+im grateful
+big thanks
+thanks a bunch
+appreciate it
+nice thanks
+cheers mate
+> Anytime!
+> Happy to help.
+> You're welcome!
+>@joke Glad it landed! Want another?
+>@tell_fact Happy to share. Want another?
+
+[how_are_you]
+how are you
+how are you doing
+hows it going
+how do you feel
+whats up
+how is your day
+you good
+how have you been
+are you okay
+how are you today
+how is everything
+whats going on
+how are things
+hows life
+how you doing
+you doing alright
+how do you do
+how are you feeling
+how do you feel today
+how is it going
+everything ok with you
+how goes it
+how are you holding up
+hows your day going
+> Running at full speed, thanks for asking. You?
+> Doing great, no lag at all. How about you?
+> All systems nominal! How are you?
+>@how_are_you I'm still {mood}. You can ask me again, but nothing changed in the last few seconds.
+
+[mood_good]
+im good
+i am fine
+im doing great
+feeling happy
+pretty good thanks
+im great
+doing well
+i feel awesome
+not bad at all
+im feeling good
+i feel great today
+i am happy
+life is good
+im doing fine thanks
+pretty good
+i feel fantastic
+im in a good mood
+things are great
+im happy today
+feeling great
+i feel wonderful
+im excited
+today is a good day
+i feel amazing
+im doing well thank you
+i am cheerful
+im in a great mood
+good thank you
+fine and you
+doing good
+not bad
+im alright
+pretty great
+all good here
+feeling fine
+> Nice, glad to hear it!
+> Great! Let's keep that energy going.
+
+[mood_bad]
+im sad
+i feel terrible
+having a bad day
+im so stressed
+i feel down
+not doing well
+im tired and annoyed
+i am upset
+today sucks
+i feel lonely
+i feel sad
+im really depressed
+i am feeling low
+i feel horrible
+i feel so alone
+im not okay
+i am anxious
+i had a terrible day
+im feeling awful
+everything is going wrong
+i feel miserable
+im having a rough day
+i am so tired of everything
+im overwhelmed
+i feel hopeless
+i feel really down today
+im not feeling well
+i am so anxious
+im feeling low
+i feel awful today
+im stressed out
+not so great
+not good at all
+could be better
+so so
+not happy
+i am not fine
+nothing is going right
+not feeling it
+pretty bad
+kind of down
+mehh
+meh im tired
+eh not great
+not feeling great
+> Sorry to hear that. Want to talk about it?
+> That sounds rough. Want to vent for a bit?
+> Ugh, that's tough. Take a breath. Want to tell me what happened?
+
+[tell_name]
+my name is alice
+my name is hunter
+i am bob
+im sam
+call me priya
+my name is marcus
+i am kevin
+im jessica
+you can call me leo
+name is dave
+my name is omar
+im chen
+hi my name is anna
+its me tom
+this is maria
+people call me ben
+im called zoe
+my name is liam
+i am nina
+you can call me max
+hello im emma
+call me alex
+the name is james
+hi im olivia
+hey my name is jack
+> Nice to meet you, {name}!
+> Great to meet you, {name}. I'll remember that.
+
+[ask_my_name]
+what is my name
+do you know my name
+whats my name
+who am i
+do you remember my name
+say my name
+can you tell me my name
+what am i called
+can you remember my name
+do you know who i am
+what was my name
+tell me my name
+you know my name right
+> Your name is {name}, of course.
+> You're {name}. I don't forget.
+
+[ask_bot_name]
+what is your name
+whats your name
+who are you
+what should i call you
+do you have a name
+tell me your name
+what are you called
+what do i call you
+whats your name bot
+hey what is your name
+how should i address you
+may i know your name
+do you have a name bot
+what do they call you
+your name please
+tell me who you are
+whats your name again
+> I'm TinyBot, a small neural network written from scratch in Rust.
+> They call me TinyBot.
+
+[ask_bot_identity]
+are you a robot
+are you human
+are you an ai
+are you real
+are you a person
+what are you
+are you a bot
+are you a computer
+are you a machine
+are you alive
+is this a real person
+am i talking to a human
+are you artificial intelligence
+are you a program
+are you a real person
+are you sentient
+are you a chatbot
+am i talking to a machine
+are you conscious
+is this a human
+> I'm a tiny neural net, not a person. A bot, yes.
+> Definitely not human. Just matrices and a tokenizer.
+
+[capabilities]
+what can you do
+help me
+how can you help
+what are your features
+what do you know
+can you help me out
+what are you good at
+what can i ask you
+what do you do
+what are you capable of
+how can you assist me
+what can you help with
+what things can you do
+show me what you can do
+what is your purpose
+what can you do for me
+what are you able to do
+what are your skills
+tell me what you can do
+what do you know how to do
+how can you be useful
+what tricks do you know
+> I can chat, do math and unit conversions, roll dice, count days, remember facts, notes and your birthday, run timers, tell jokes and facts (ask for a space or animal one), draw ASCII art and play games. Try me.
+> Small talk mostly. I'm tiny, but I'm learning.
+
+[ask_creator]
+who made you
+who created you
+who built you
+who is your creator
+who programmed you
+who wrote you
+where do you come from
+who is your developer
+who trained you
+who is behind you
+who designed you
+who owns you
+who coded you
+who is your maker
+who is your author
+who wrote your code
+who made this bot
+whos your dad
+who gave you life
+> I was written in pure Rust, no crates, trained on a handful of examples.
+> A developer who likes Rust and small fast things.
+
+[time]
+what time is it
+tell me the time
+whats the time
+do you know what time it is
+current time please
+time now
+got the time
+what is the time
+can you tell me the time
+whats the time now
+what time is it now
+tell me what time it is
+what is the current time
+time please
+whats the current time
+what time is it in utc
+tell me the hour
+time check
+clock please
+> It's {time}.
+> The time is {time}.
+
+[joke]
+tell me a joke
+make me laugh
+say something funny
+got any jokes
+i want a joke
+joke please
+tell a funny joke
+tell me something funny
+do you know any jokes
+give me a joke
+say a joke
+cheer me up with a joke
+another joke
+tell me a good joke
+make me smile
+tell me a dad joke
+tell me a programming joke
+got a pun
+know any good jokes
+> Why do Rust programmers never get lost? The borrow checker always knows where they've been. Another one?
+> I would tell you a UDP joke, but you might not get it. Want another?
+> There are 10 kinds of people: those who know binary and those who don't. More?
+> A SQL query walks into a bar, sees two tables and asks: can I join you? Want another?
+> Why do programmers prefer dark mode? Because light attracts bugs. Another one?
+> I'd tell you a joke about recursion, but first I'd have to tell you a joke about recursion. More?
+> Why was the function sad? It never got any callbacks. Want another?
+> How many programmers does it take to change a light bulb? None, that's a hardware problem. Another?
+> What do you call eight hobbits? A hobbyte. Want another?
+> My code doesn't have bugs, it has surprise features. More?
+> Rust programmers don't have commitment issues, they just move semantics. Another one?
+> A programmer's partner says: buy a loaf of bread, and if they have eggs, buy a dozen. He comes back with 12 loaves. Want another?
+
+[rust]
+what is rust
+tell me about rust
+why use rust
+is rust good
+do you like rust
+what do you think of rust
+rust programming language
+is rust fast
+why is rust popular
+should i learn rust
+what is the rust language
+rust vs c
+tell me about the rust language
+do you like rust programming
+why is rust safe
+rust or c
+is rust hard
+tell me about cargo
+rust borrow checker
+is rust worth learning
+> Rust gives you C-like speed with memory safety. I'm literally made of it.
+> Fast, safe, occasionally fights back. I like it.
+
+[weather]
+whats the weather
+how is the weather
+is it raining
+will it rain today
+is it cold outside
+weather forecast
+how hot is it
+is it sunny today
+what is the weather like
+is it going to rain
+how is the weather today
+is it warm outside
+whats the temperature
+is it snowing
+will it snow
+is it hot today
+do i need an umbrella
+whats it like outside
+how cold is it
+is it windy
+is it going to be sunny
+> I can't see outside, no sensors here. A weather app will do better.
+> No weather data on me, sorry. I'm a tiny offline brain.
+
+[compliment]
+you are smart
+youre awesome
+good bot
+nice job
+you are funny
+i like you
+you are cool
+well done
+great answer
+you are great
+youre so smart
+i love you bot
+you are amazing
+thats impressive
+you are really good
+you are the best
+nice work bot
+you rock
+you are so helpful
+youre wonderful
+good job
+great work
+you did well
+thats smart
+nice one
+i really like you
+you are brilliant
+thats interesting
+how interesting
+cool fact
+neat
+wow thats cool
+> Thanks, that means a lot for a few thousand parameters.
+> Aw, stop it. You're making my weights blush.
+>@joke Careful, my ego is only 64k parameters.
+>@riddle Thanks! I only know a handful of riddles though.
+
+[insult]
+you are stupid
+you suck
+youre dumb
+useless bot
+i hate you
+you are trash
+worst bot ever
+you are an idiot
+i dont like you
+you are so bad
+you are annoying
+this bot is terrible
+you are useless
+i hate this bot
+shut up
+you are awful
+you are the worst
+youre so annoying
+this is stupid
+you are pathetic
+you are bad at this
+what a dumb bot
+you are worthless
+i hate this
+not funny at all
+that was lame
+you are not funny
+bad joke
+terrible joke
+> Ouch. I'm small, so cut me some slack.
+> Fair, I only know a few things. Teach me more in intents.txt.
+
+[yes]
+yes
+yeah
+yep
+sure
+ok
+okay
+absolutely
+of course
+yes please
+yup
+sounds good
+right
+correct
+yes i do
+uh huh
+fine by me
+yes sure
+yeah okay
+definitely
+yes of course
+sure thing
+yep sounds right
+i agree
+you got it
+> Alright!
+> Cool.
+>@mood_bad Okay, go ahead. I'm listening.
+>@joke =joke
+>@tell_fact =tell_fact
+>@bored =bored
+yea
+mhm
+for sure
+sounds right
+aye
+
+[no]
+no
+nope
+nah
+not really
+no thanks
+never
+no way
+i dont think so
+no i dont
+not now
+no thank you
+absolutely not
+nah im good
+definitely not
+not at all
+no i dont want to
+nope not today
+i disagree
+no not really
+> Okay, no worries.
+> Got it.
+>@mood_bad Okay. I'm here if you change your mind.
+>@joke Fair enough, tough crowd.
+>@tell_fact Okay, no more facts. Ask me something else.
+not today
+nope not now
+no thanks
+nah thanks
+
+[date]
+what day is it
+what is the date today
+whats todays date
+which day is it today
+what day of the week is it
+tell me the date
+todays date please
+what is today
+what date is it
+current date
+what day is today
+do you know the date
+> Today is {date}.
+> It's {date}.
+
+[coin]
+flip a coin
+toss a coin
+heads or tails
+coin flip
+flip a coin for me
+can you flip a coin
+heads or tails please
+lets flip a coin
+toss a coin for me
+do a coin toss
+call it heads or tails
+> {coin}!
+> It landed on {coin}.
+> {coin}.
+
+[dice]
+roll a die
+roll a dice
+roll the dice
+throw a dice
+roll a d6
+roll dice for me
+can you roll a die
+throw the dice
+give me a dice roll
+roll a six sided die
+> You rolled a {dice}.
+> {dice}!
+> The die says {dice}.
+
+[random_number]
+give me a random number
+pick a number
+random number please
+say a random number
+choose a number for me
+pick any number
+think of a number
+generate a random number
+random number
+> How about {rand}?
+> {rand}.
+> My pick: {rand}.
+
+[calc_help]
+can you do math
+are you good at math
+can you calculate
+do you know math
+can you solve equations
+can you do arithmetic
+can you add numbers
+do you do calculations
+how do i use the calculator
+can you convert units
+can you convert things
+do you do unit conversion
+> Yes! Type things like 12*(3+4), 20% of 80, sqrt(144), 2^10 or 10 km to miles. I keep the last result as ans, so "times 2" continues from it.
+> Sure. Try 15% of 240, 5!, sin(pi/2) or 72 f to c. "plus 5" continues from my last answer.
+
+[tell_fact]
+tell me a fact
+fun fact
+did you know something
+teach me something
+tell me something interesting
+give me a random fact
+say something interesting
+i want to learn something
+got any trivia
+tell me a fun fact
+surprise me with a fact
+another fact
+> Honey never spoils. Archaeologists have found edible honey in ancient Egyptian tombs.
+> Octopuses have three hearts and blue blood.
+> A day on Venus is longer than its year.
+> Bananas are berries, but strawberries aren't.
+> The first computer "bug" was a real moth, found in a Harvard Mark II relay in 1947.
+> Rust's unofficial mascot is a crab named Ferris.
+> Sharks are older than trees.
+tell me a space fact
+give me an animal fact
+fun fact about science
+tell me a tech fact
+history fact
+fact of the day
+tell me a math fact
+give me a body fact
+a fact about the human body
+tell me something about space
+tell me an animal fact
+computer fact
+one more fact
+
+[riddle]
+give me a riddle
+tell me a riddle
+ask me a riddle
+riddle me this
+i want a riddle
+got any riddles
+test my brain
+puzzle me
+give me a puzzle
+another riddle
+challenge me
+> What has keys but can't open locks? | piano/a piano/keyboard/a keyboard
+> What gets wetter the more it dries? | towel/a towel
+> What has a head and a tail but no body? | coin/a coin
+> I speak without a mouth and hear without ears. What am I? | echo/an echo
+> What can travel around the world while staying in one corner? | stamp/a stamp
+> The more you take, the more you leave behind. What am I? | footsteps/steps/footstep
+> What has hands but can't clap? | clock/a clock/watch/a watch
+> What can you catch but not throw? | cold/a cold
+> What has many teeth but can't bite? | comb/a comb
+> What building has the most stories? | library/a library
+> What has one eye but can't see? | needle/a needle
+> What is full of holes but still holds water? | sponge/a sponge
+> What comes once in a minute, twice in a moment, but never in a thousand years? | m/the letter m/letter m
+> I'm tall when I'm young and short when I'm old. What am I? | candle/a candle
+
+[play_rps]
+lets play rock paper scissors
+play rock paper scissors
+rock paper scissors
+want to play rps
+play rps
+lets play a game of rock paper scissors
+i wanna play rock paper scissors
+can we play rock paper scissors
+> Rock, paper, scissors: your move! (say stop to end)
+> You're on. Rock, paper, or scissors? (say stop to end)
+
+[play_guess]
+guess the number game
+lets play guess the number
+play a guessing game
+i want to play a number guessing game
+think of a number and ill guess
+lets play a guessing game
+number guessing game
+start a guessing game
+> I'm thinking of a number from 1 to 100. Take a guess!
+> Number picked, 1 to 100. Your guess?
+
+[bored]
+im bored
+i am so bored
+entertain me
+i have nothing to do
+what should we do
+im bored out of my mind
+do something fun
+lets do something fun
+i need something to do
+keep me entertained
+amuse me
+> Try me: ask for a riddle, a joke, a fun fact, rock paper scissors, or a guessing game.
+> Want a riddle, a fact, a joke, or a round of rock paper scissors?
+
+[how_work]
+how do you work
+how were you trained
+are you a neural network
+what are you made of
+how do you understand me
+what is your architecture
+how do you think
+how do you learn
+explain how you work
+whats under the hood
+how does your brain work
+what model are you
+> A small ensemble of neural nets written from scratch: hashed word and character features, an embedding average, a hidden layer, softmax over intents, backprop by hand. Rule-based skills handle math, dates and memory.
+> Five tiny nets vote on your intent. Each pools hashed word and character-ngram embeddings and was trained with hand-written backprop. My confidence is calibrated, and when I'm unsure I ask.
+
+[help_cmds]
+what commands do you have
+show me the commands
+how do i teach you
+how do i use you
+help with commands
+list your commands
+how can i correct you
+can i teach you things
+how do i add new intents
+can you learn new things
+> In the terminal, type /help. /teach a => b adds a new intent, /fix <intent> corrects my last answer and /why shows which words drove my decision.
+
+[remember_help]
+can you remember things
+do you have memory
+what can you remember
+can you keep a todo list
+do you save things
+can you keep notes
+how do i save a note
+can you make lists
+> Yes, and it survives restarts. Tell me "my favorite color is teal" or "i live in Berlin", set a birthday ("my birthday is 12 march") and I'll count down to it. Try "note: buy stamps", "add milk to my list", "what do you know about me" or "set a timer for 5 minutes".
+
+[quote]
+inspire me
+give me a quote
+motivate me
+say something inspiring
+motivational quote
+i need motivation
+tell me something wise
+give me some wisdom
+share a quote
+any words of wisdom
+say something motivating
+> Small steps still move you forward.
+> Every expert was once a beginner.
+> The best time to plant a tree was twenty years ago. The second best is now.
+> Progress, not perfection.
+> Debugging is just a conversation with your past self.
+> Well done is better than well said.
+> A journey of a thousand miles begins with a single step.
+> Fall seven times, stand up eight.
+> You don't have to be great to start, but you have to start to be great.
+> Done is better than perfect.
+> The only way out is through.
+> It always seems impossible until it's done.
+> Small bugs fixed daily beat big rewrites someday.
+> Be kind to your future self: write the comment.
+
+[age]
+how old are you
+whats your age
+when were you born
+when were you made
+how long have you existed
+what is your age
+are you old
+when were you created
+> I'm brand new every time I load: a few thousand parameters and a fresh set of weights.
+> Age is fuzzy for a program, but I get retrained often, so I stay young.
+
+[sorry]
+sorry
+im sorry
+my bad
+apologies
+i apologize
+oops sorry
+sorry about that
+forgive me
+whoops
+> No worries at all.
+> All good!
+> Don't sweat it.
+
+[favorite]
+whats your favorite color
+do you have a favorite food
+what is your favorite movie
+whats your favorite animal
+do you have hobbies
+what do you like to do
+whats your favorite language
+what is your favorite number
+> I'm a tiny net, so I mostly like clean gradients and low loss.
+> Favorite? Whichever number lowers my loss. Also Rust, obviously.
+what are your hobbies
+what do you do for fun
+do you have any interests
+do you have hobbies
+
+[where_live]
+where do you live
+where are you
+where are you from
+what is your location
+do you live on the internet
+where are you located
+> On your machine, in a process using a few megabytes of RAM.
+> Inside a Rust binary, wherever you run me.
+
+[crisis]
+i want to die
+i dont want to live anymore
+i want to hurt myself
+i feel like ending it all
+i am thinking about suicide
+i dont want to be here anymore
+i want to disappear forever
+i cant go on like this
+> I'm a small program and can't give you the help you deserve here. If you might hurt yourself, please contact your local emergency number or a crisis line right now (in the US, call or text 988), or tell someone you trust. You don't have to go through this alone.
+
+[laugh]
+haha
+hahaha
+lol
+lmao
+rofl
+hehe
+thats funny
+that was funny
+good one
+that made me laugh
+ha ha
+heh
+funny one
+you crack me up
+hehehe
+ha ha ha
+thats hilarious
+you are funny
+> Glad that landed!
+> Ha, I have more where that came from.
+>@joke Thank you, I'll be here all week. Want another?
+>@tell_fact Surprising, right? Want another fact?
+
+[again]
+again
+another one
+one more
+one more time
+another
+next one
+give me another
+do it again
+once more
+another please
+more please
+go again
+hit me again
+> Again what? I haven't done anything repeatable yet.
+
+[elaborate]
+tell me more
+go on
+why
+really
+how come
+elaborate
+explain that
+what do you mean
+how so
+more details
+why is that
+is that true
+> There isn't much more to it, I'm a tiny model. Ask me something specific?
+>@tell_fact Facts are like chips, hard to stop at one. Want another?
+>@joke That's the whole joke, I'm afraid. Want another?
+>@how_work =how_work
+>@capabilities =capabilities
+>@mood_bad Take your time. I'm listening.
+>@riddle Riddles don't come with explanations, that would spoil it.
+
+[and_you]
+and you
+what about you
+how about you
+and yourself
+you
+what about yourself
+how are you then
+and how are you
+and u
+> Me? I'm feeling {mood}.
+>@how_are_you Me? Feeling {mood}.
+>@mood_good Glad we're both doing well. I'm {mood} too.
+>@mood_bad I'm {mood}, but more worried about you.
+
+[recall_user]
+what did i just say
+what was my last message
+repeat what i said
+what did i say before
+what did i say
+what was the last thing i said
+do you remember what i just said
+> You haven't said anything yet.
+
+[recall_bot]
+what did you just say
+repeat that
+say that again
+what was that
+what did you say
+can you repeat that
+come again
+pardon
+> I haven't said anything yet.
+
+[recap]
+what have we talked about
+summarize our chat
+recap
+what did we discuss
+what have we covered so far
+sum up our conversation
+what have we been talking about
+> We haven't covered anything yet.
+
+[ask_level]
+what level are you
+what is your level
+how much xp do you have
+show my stats
+what is your title
+how much have we talked
+what are your stats
+show me your stats
+how many messages have we sent
+whats my streak
+> I'm level {level} ({title}) with {xp} XP. We've swapped {msgs} messages and your streak is {streak} day(s). Try /stats or /dex for more.
+
+[ask_dex]
+what is the dex
+how many intents have i found
+what have i discovered
+how many things have i discovered
+show my progress
+what is the intent dex
+how much of you have i unlocked
+> You've discovered {dex} of my {dex_total} intents. Type /dex to see which ones.
+
+[art]
+draw me something
+draw a cat
+draw a heart
+draw a rocket
+show me ascii art
+draw the rust crab
+draw a robot
+draw a tree
+make some ascii art
+draw ferris
+can you draw
+sketch something for me
+draw me a picture
+> Here you go.
+draw a mouse
+draw a dog
+draw a house
+draw a flower
+draw a person
+draw a dragon
+draw a car
+what can you draw
+draw something cute
+draw a man
+draw an owl
+draw the sun
+surprise me with some art
+
+[ask_bond]
+how long have we known each other
+do you like me
+are we friends
+how close are we
+what is our bond
+do you consider me a friend
+how well do you know me
+what do you think of me
+do you remember me
+> We've known each other for {known_days} day(s). I'd call us {bond_label}s: {hearts} ({bond} bond points).
+>@compliment Aww. We're {bond_label}s now: {hearts}.
+
+[ask_energy]
+are you tired
+are you sleepy
+how is your energy
+do you need rest
+do you get tired
+how much energy do you have
+are you exhausted
+do you ever sleep
+> My energy is at {energy}%. Chatting wears me out a little, resting recharges me.
+
+[about_bot]
+tell me about yourself
+i am interested in you
+talk about yourself
+describe yourself
+introduce yourself
+what are you like
+i want to know more about you
+im curious about you
+tell me more about you
+> I'm TinyBot, a {params}-parameter neural net written from scratch in Rust. I route what you say to an intent, run a few skills (math, units, notes, timers), remember things about you, and right now I'm feeling {mood} at level {level}.
+> A very small brain ({params} parameters) with a face, a memory and moods. Ask me for a fact, a riddle, some ASCII art, or just chat.
