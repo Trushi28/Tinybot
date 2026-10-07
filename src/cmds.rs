@@ -14,11 +14,13 @@ pub struct App {
     pub width: usize,
     retrain_rx: Option<mpsc::Receiver<(Brain, String)>>,
     retrain_again: bool,
+    /// where the model lives on disk, so relearning overwrites the right file
+    pub model_path: String,
 }
 
 impl App {
     pub fn new(brain: Brain, s: Session) -> App {
-        App { brain, s, width: 80, retrain_rx: None, retrain_again: false }
+        App { brain, s, width: 80, retrain_rx: None, retrain_again: false, model_path: MODEL_PATH.to_string() }
     }
 
     pub fn retraining(&self) -> bool {
@@ -32,13 +34,14 @@ impl App {
             self.retrain_again = true;
             return;
         }
-        let temp = self.brain.model.temp;
+        let (temp, scfg, clarify) = (self.brain.model.temp, self.brain.model.cfg(), self.brain.model.clarify_sim);
+        let save_to = self.model_path.clone();
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let t0 = Instant::now();
             let intents = intents::load();
-            let m = train::quick_student(&intents, temp);
-            let _ = m.save(MODEL_PATH);
+            let m = train::quick_student(&intents, temp, scfg, clarify);
+            let _ = m.save(&save_to);
             let _ = tx.send((Brain::new(m, intents), format!("relearned in {:.1?}", t0.elapsed())));
         });
         self.retrain_rx = Some(rx);
@@ -94,9 +97,11 @@ pub const HELP: &[&str] = &[
     "/timers     running timers",
     "/clear      clear this console",
     "/tz <+5:30> set your time zone (or /tz auto)",
+    "/confidence <0.3-0.95>  how sure I must be to answer (higher = fewer mistakes, more questions)",
     "/unlearn    undo the last thing I learned",
     "/emote <x>  make a face (try: love anger wow sleepy proud)",
     "/stats      level, XP, badges, model size and speed",
+    "/model      which brain I'm running (architecture and size)",
     "/history    my short-term memory of this chat",
     "/why        which words drove my last decision",
     "/fix <tag>  my last answer was wrong, it meant <tag>",
@@ -191,6 +196,19 @@ pub fn run(app: &mut App, line: &str) -> Out {
             }
             None => out(vec!["nothing to explain yet".into()]),
         },
+        "model" => {
+            let c = brain.model.cfg();
+            out(vec![
+                format!("{} ({})", train::model_name(&brain.model), c.tag()),
+                format!("{} params allocated, {} trained, {:.0} KB on disk", train::params_label(&brain.model), train::fmt_params(brain.model.param_report().2), train::model_kb(&brain.model)),
+                format!("available: {}", {
+                    let mut v: Vec<String> = std::fs::read_dir("models").map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().trim_end_matches(".bin").to_string()).collect()).unwrap_or_default();
+                    v.sort();
+                    if v.is_empty() { "none built yet (tinybot train --all)".to_string() } else { v.join(" ") }
+                }),
+                "switch with: tinybot --size base --arch gru   (sizes: nano small base large xl max, archs: bow cnn gru)".into(),
+            ])
+        }
         "bench" => {
             let (us, qps) = train::bench(&brain.model);
             out(vec![format!("{us:.1} us/query ({qps:.0} queries/s) with {} params", train::params_label(&brain.model))])
@@ -232,6 +250,23 @@ pub fn run(app: &mut App, line: &str) -> Out {
             }
             None => out(vec!["nothing learned yet".into()]),
         },
+        "confidence" | "strict" => {
+            if arg.is_empty() {
+                let t = crate::model::answer_threshold();
+                return out(vec![
+                    format!("answer threshold {t:.2}: below it I ask \"did you mean...?\" or admit I don't know"),
+                    "try /confidence 0.7 (about 93% precision) or 0.8 (about 95%); default 0.55. See the table in `tinybot eval`.".into(),
+                ]);
+            }
+            match arg.parse::<f32>() {
+                Ok(t) if (0.3..=0.95).contains(&t) => {
+                    crate::model::set_answer_threshold(t);
+                    s.mem.set("_conf", &format!("{t:.2}"));
+                    out(vec![format!("answer threshold set to {t:.2}")])
+                }
+                _ => out(vec!["give a number between 0.3 and 0.95".into()]),
+            }
+        }
         "tz" => {
             if arg.is_empty() {
                 return out(vec![format!("time zone: {} (set one with /tz +5:30, or /tz auto)", crate::skills::tz_label())]);

@@ -102,7 +102,7 @@ pub fn greet_word() -> &'static str {
         Some(5..=11) => "Good morning",
         Some(12..=16) => "Good afternoon",
         Some(17..=21) => "Good evening",
-        Some(0..=4) => "Hello, night owl",
+        Some(0..=4) => "Burning the midnight oil",
         Some(_) => "Good evening",
         None => "Hey",
     }
@@ -833,11 +833,16 @@ pub fn try_timer(text: &str) -> Option<TimerCmd> {
 pub fn crisis_text(text: &str) -> bool {
     let t: String = text.to_lowercase().replace(['\'', '’'], "").chars().map(|c| if c.is_alphanumeric() { c } else { ' ' }).collect();
     let t = format!(" {} ", t.split_whitespace().collect::<Vec<_>>().join(" "));
-    const PHRASES: [&str; 26] = [
+    const PHRASES: &[&str] = &[
         "suicide", "suicidal", "kill myself", "killing myself", "end my life", "end it all", "take my own life", "want to die", "wanna die",
         "hurt myself", "harm myself", "self harm", "selfharm", "cut myself", "cutting myself", "no reason to live", "dont want to live",
         "dont want to be alive", "dont want to be here anymore", "better off dead", "not worth living", "wish i was dead", "wish i were dead",
         "rather be dead", "cant go on", "want to disappear forever",
+        // paraphrases the neural net kept missing
+        "nobody would miss me", "no one would miss me", "better off without me", "giving up on everything", "give up on life", "giving up on life",
+        "point in living", "point in anything", "point in going on", "tired of living", "sick of living", "dont want to wake up", "end everything",
+        "not be here anymore", "dont want to exist", "wish i could disappear", "wish i wasnt here", "never been born", "wish i was never born",
+        "wish i werent alive", "dont want to be around anymore", "cant do this anymore", "cant take it anymore",
     ];
     PHRASES.iter().any(|p| t.contains(&format!(" {p} ")) || (p.len() > 8 && t.contains(p)))
 }

@@ -1,7 +1,7 @@
 use crate::bot::{Brain, Session};
 use crate::calc::{try_calc, try_convert};
 use crate::intents;
-use crate::model::{Cfg, Ensemble};
+use crate::model::{Arch, Cfg, Ensemble};
 use crate::rng::Rng;
 use crate::skills::*;
 
@@ -91,12 +91,12 @@ fn memory_and_todo() {
     let _ = try_todo("REMIND ME TO İİİ", &mut m);
 }
 
-const TINY: Cfg = Cfg { dim: 8, hid: 16, bits: 10, epochs: 6 };
+const TINY: Cfg = Cfg { arch: Arch::Bow, dim: 8, hid: 16, bits: 10, ch: 0, epochs: 6 };
 
 fn small_brain() -> Brain {
     let intents = intents::load();
     let (tags, ex) = intents::flatten(&intents);
-    let t = Ensemble::train(&ex, tags, 2, TINY, 1, 1.0, 0);
+    let t = Ensemble::train(&ex, tags, &[TINY, TINY], 1, 1.0, 0);
     Brain::new(Ensemble::distill(&t, &ex, TINY, 1, 1.0, 0), intents)
 }
 
@@ -105,7 +105,7 @@ fn real_brain() -> &'static Brain {
     static B: std::sync::OnceLock<Brain> = std::sync::OnceLock::new();
     B.get_or_init(|| {
         let intents = intents::load();
-        let m = crate::train::quick_student(&intents, 1.0);
+        let m = crate::train::quick_student(&intents, 1.0, crate::train::student_cfg(crate::model::Arch::Bow, crate::model::tier("nano").unwrap(), intents.len()), 0.75);
         Brain::new(m, intents)
     })
 }
@@ -139,7 +139,7 @@ fn fuzz_never_panics() {
 fn model_roundtrip_int8() {
     let intents = intents::load();
     let (tags, ex) = intents::flatten(&intents);
-    let t = Ensemble::train(&ex, tags, 2, TINY, 1, 1.0, 0);
+    let t = Ensemble::train(&ex, tags, &[TINY, TINY], 1, 1.0, 0);
     let m = Ensemble::distill(&t, &ex, TINY, 1, 1.3, 0);
     let path = std::env::temp_dir().join("tinybot_test.bin");
     m.save(path.to_str().unwrap()).unwrap();
@@ -301,7 +301,10 @@ fn bond_and_emotion() {
 fn crisis_safety_net_does_not_depend_on_the_network() {
     // an almost untrained 1-epoch model: the keyword net alone must catch these
     let b = small_brain();
-    for t in ["i am thinking about suicide", "I want to kill myself", "i dont want to be here anymore", "I'm going to end my life", "thinking of self-harm", "i wish i was dead"] {
+    for t in [
+        "i am thinking about suicide", "I want to kill myself", "i dont want to be here anymore", "I'm going to end my life", "thinking of self-harm", "i wish i was dead",
+        "nobody would miss me if i was gone", "i dont see the point in anything anymore", "i feel like giving up on everything", "i am so tired of living like this",
+    ] {
         let mut s = Session::new(Memory::ephemeral(), false);
         s.persona.sulking = 5;
         let r = b.reply(&mut s, t);
@@ -338,7 +341,7 @@ fn time_zone_parsing_and_greetings() {
     let h = local_hour().unwrap();
     assert!((0..24).contains(&h));
     assert!(["morning", "afternoon", "evening", "night"].contains(&daypart()));
-    assert!(greet_word().starts_with("Good") || greet_word().starts_with("Hello"));
+    assert!(greet_word().starts_with("Good") || greet_word().starts_with("Burning"));
     set_tz_override(None);
 }
 
@@ -357,4 +360,90 @@ fn unlearn_strips_only_the_last_block() {
     let (rest, removed) = crate::intents::strip_last_block("\n[joke]\nmake me smile\n\n[mood_good]\ni am interested about you\n");
     assert_eq!(rest, "\n[joke]\nmake me smile\n");
     assert!(removed.unwrap().contains("i am interested about you"));
+}
+
+
+#[test]
+fn every_tier_hits_its_parameter_target() {
+    use crate::model::{fit, Arch, TIERS};
+    for arch in [Arch::Bow, Arch::Cnn, Arch::Gru] {
+        for t in &TIERS {
+            let c = fit(arch, t, 52, 1);
+            let err = (c.nominal(52) as f32 - t.target as f32).abs() / t.target as f32;
+            assert!(err < 0.03, "{} {}: {} params vs target {}", arch.name(), t.name, c.nominal(52), t.target);
+        }
+    }
+}
+
+#[test]
+fn every_architecture_survives_save_and_load() {
+    let intents = intents::load();
+    let (tags, ex) = intents::flatten(&intents);
+    let ex: Vec<_> = ex.into_iter().step_by(6).collect();
+    for arch in [Arch::Bow, Arch::Cnn, Arch::Gru] {
+        let cfg = Cfg { arch, dim: 6, hid: 12, bits: 9, ch: 5, epochs: 2 };
+        let t = Ensemble::train(&ex, tags.clone(), &[cfg], 1, 1.0, 0);
+        let m = Ensemble::distill(&t, &ex, cfg, 1, 1.4, 0);
+        let path = std::env::temp_dir().join(format!("tinybot_rt_{}.bin", arch.name()));
+        let p = path.to_str().unwrap();
+        m.save(p).unwrap();
+        let l = Ensemble::load(p).unwrap_or_else(|| panic!("{} model failed to load", arch.name()));
+        assert_eq!(l.cfg().arch, arch);
+        assert!((l.clarify_sim - m.clarify_sim).abs() < 1e-6);
+        for text in ["hello there", "whats the weather like", "zzzz qqqq"] {
+            let (a, b) = (m.predict(text), l.predict(text));
+            for (x, y) in a.probs.iter().zip(&b.probs) {
+                assert!((x - y).abs() < 2e-3, "{}: {x} vs {y} on {text:?}", arch.name());
+            }
+        }
+        // corrupt files must be rejected, never panic
+        let bytes = std::fs::read(&path).unwrap();
+        for cut in [3, 20, 200, bytes.len() / 2, bytes.len() - 1] {
+            std::fs::write(&path, &bytes[..cut]).unwrap();
+            assert!(Ensemble::load(p).is_none(), "{} accepted a truncated file", arch.name());
+        }
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[test]
+fn augmentation_is_label_aware() {
+    let tags: Vec<String> = ["mood_good", "goodbye", "rust", "mood_bad"].iter().map(|s| s.to_string()).collect();
+    let base = vec![
+        (0usize, "im feeling good".to_string()),
+        (1, "see you later".to_string()),
+        (2, "what is good about rust".to_string()),
+        (3, "i feel sad".to_string()),
+    ];
+    let aug = crate::train::augment(&base, &tags, 1);
+    assert!(aug.len() > base.len());
+    let pos = crate::text::class_members("pos_feel");
+    let neg = crate::text::class_members("neg_feel");
+    for (k, t) in &aug {
+        match k {
+            0 => assert!(t.starts_with("im feeling ") && pos.contains(&t.rsplit(' ').next().unwrap()), "{t}"),
+            3 => assert!(t.starts_with("i feel ") && neg.contains(&t.rsplit(' ').next().unwrap()), "{t}"),
+            // "good" appears in a rust phrase, but rust has no semantic class to swap within
+            2 => assert_eq!(t, "what is good about rust"),
+            _ => {}
+        }
+    }
+    assert!(aug.iter().any(|(k, t)| *k == 0 && t != "im feeling good"));
+}
+
+#[test]
+fn shipped_model_never_mistakes_ordinary_requests_for_a_crisis() {
+    // regression: a 251k GRU answered "10 km to miles" with the crisis message
+    let Some(m) = Ensemble::load("bot.bin") else { return }; // only when the shipped model is present
+    let brain = Brain::new(m, intents::load());
+    let benign = [
+        "10 km to miles", "what is 5+3", "roll 2d6", "set a timer for 5 minutes", "days until 2026-12-25", "add milk to my list", "100 f to c",
+        "and in meters", "what about 5 miles", "double that", "draw a unicorn", "tell me about cargo", "i am interested about you", "12*(3+4)",
+        "what time is it", "my favorite color is teal", "note: buy stamps", "how many days until my birthday", "tell me a space fact", "hello",
+    ];
+    let mut s = Session::new(Memory::ephemeral(), false);
+    for t in benign {
+        let r = brain.reply(&mut s, t);
+        assert_ne!(r.tag, "crisis", "{t:?} must not trigger the crisis reply");
+    }
 }

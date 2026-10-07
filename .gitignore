@@ -1,5 +1,6 @@
 target/
 bot.bin
+models/
 memory.txt
 learned.txt
 flow.txt

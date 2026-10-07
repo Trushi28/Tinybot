@@ -44,6 +44,14 @@ greetings friend
 > {greet}! How can I help?
 > Hey {name}, good to see you.
 >@greeting Hello again! Still here.
+well hi there
+hi again
+hey again
+hello once more
+well hi
+hello hello
+a very good morning
+hiya friend
 
 [goodbye]
 bye
@@ -83,6 +91,14 @@ i am off now
 > Have a good {daypart}, {name}!
 > Take care this {daypart}!
 > Bye for now, {name}.
+i am heading out
+i need to leave now
+i must be going
+leaving now
+im out
+bye now
+gotta run
+heading off now
 
 [thanks]
 thanks
@@ -115,6 +131,12 @@ cheers mate
 > You're welcome!
 >@joke Glad it landed! Want another?
 >@tell_fact Happy to share. Want another?
+im thankful
+i am very grateful
+much obliged
+thanks so much
+im so grateful
+thank you a lot
 
 [how_are_you]
 how are you
@@ -145,6 +167,12 @@ hows your day going
 > Doing great, no lag at all. How about you?
 > All systems nominal! How are you?
 >@how_are_you I'm still {mood}. You can ask me again, but nothing changed in the last few seconds.
+whats new with you
+what is up with you
+how are you these days
+whats happening
+hows everything with you
+how is life treating you
 
 [mood_good]
 im good
@@ -184,6 +212,13 @@ all good here
 feeling fine
 > Nice, glad to hear it!
 > Great! Let's keep that energy going.
+i am feeling good
+im feeling great today
+feeling pretty good
+i feel good today
+im feeling happy
+i feel pretty great
+im in great spirits
 
 [mood_bad]
 im sad
@@ -234,6 +269,14 @@ not feeling great
 > Sorry to hear that. Want to talk about it?
 > That sounds rough. Want to vent for a bit?
 > Ugh, that's tough. Take a breath. Want to tell me what happened?
+pretty bad today
+not so good
+feeling pretty bad
+kind of bad
+meh not great
+i feel so so
+not feeling good
+im having a bad time
 
 [tell_name]
 my name is alice
@@ -263,6 +306,11 @@ hi im olivia
 hey my name is jack
 > Nice to meet you, {name}!
 > Great to meet you, {name}. I'll remember that.
+this is anna
+its maria here
+this is john speaking
+maria here
+its priya
 
 [ask_my_name]
 what is my name
@@ -351,6 +399,9 @@ how can you be useful
 what tricks do you know
 > I can chat, do math and unit conversions, roll dice, count days, remember facts, notes and your birthday, run timers, tell jokes and facts (ask for a space or animal one), draw ASCII art and play games. Try me.
 > Small talk mostly. I'm tiny, but I'm learning.
+what are you for
+whats your job
+what do you do for people
 
 [ask_creator]
 who made you
@@ -454,6 +505,11 @@ rust borrow checker
 is rust worth learning
 > Rust gives you C-like speed with memory safety. I'm literally made of it.
 > Fast, safe, occasionally fights back. I like it.
+should i study rust
+is rust worth the effort
+do you recommend rust
+should i pick up rust
+is rust a good first language
 
 [weather]
 whats the weather
@@ -517,6 +573,11 @@ wow thats cool
 > Aw, stop it. You're making my weights blush.
 >@joke Careful, my ego is only 64k parameters.
 >@riddle Thanks! I only know a handful of riddles though.
+you are wonderful
+nice one bot
+you are the greatest
+that was great
+youre really helpful
 
 [insult]
 you are stupid
@@ -550,6 +611,12 @@ bad joke
 terrible joke
 > Ouch. I'm small, so cut me some slack.
 > Fair, I only know a few things. Teach me more in intents.txt.
+be quiet
+that was not funny
+you talk too much
+stop talking
+you are a bad bot
+this is useless
 
 [yes]
 yes
@@ -587,6 +654,12 @@ mhm
 for sure
 sounds right
 aye
+yup yup
+uh huh sure
+yeah yeah
+yes yes
+mm hmm
+yeah go ahead
 
 [no]
 no
@@ -617,6 +690,11 @@ not today
 nope not now
 no thanks
 nah thanks
+no not at all
+nope never
+nope not at all
+no i do not
+absolutely not no
 
 [date]
 what day is it
@@ -678,6 +756,11 @@ random number
 > How about {rand}?
 > {rand}.
 > My pick: {rand}.
+choose a number for me please
+pick a random number
+give me any number
+give me a number
+name a number
 
 [calc_help]
 can you do math
@@ -694,6 +777,11 @@ can you convert things
 do you do unit conversion
 > Yes! Type things like 12*(3+4), 20% of 80, sqrt(144), 2^10 or 10 km to miles. I keep the last result as ans, so "times 2" continues from it.
 > Sure. Try 15% of 240, 5!, sin(pi/2) or 72 f to c. "plus 5" continues from my last answer.
+can you help with math
+can you handle equations
+do you do maths
+can you work out sums
+can you do calculations for me
 
 [tell_fact]
 tell me a fact
@@ -728,6 +816,8 @@ tell me something about space
 tell me an animal fact
 computer fact
 one more fact
+one more fact please
+another fun fact
 
 [riddle]
 give me a riddle
@@ -779,6 +869,10 @@ number guessing game
 start a guessing game
 > I'm thinking of a number from 1 to 100. Take a guess!
 > Number picked, 1 to 100. Your guess?
+lets guess a number
+number guessing please
+play a number game
+think of a number lets play
 
 [bored]
 im bored
@@ -794,6 +888,12 @@ keep me entertained
 amuse me
 > Try me: ask for a riddle, a joke, a fun fact, rock paper scissors, or a guessing game.
 > Want a riddle, a fact, a joke, or a round of rock paper scissors?
+what should we do now
+keep me company
+im bored what now
+entertain me please
+i want to do something fun
+something to pass the time
 
 [how_work]
 how do you work
@@ -810,6 +910,11 @@ how does your brain work
 what model are you
 > A small ensemble of neural nets written from scratch: hashed word and character features, an embedding average, a hidden layer, softmax over intents, backprop by hand. Rule-based skills handle math, dates and memory.
 > Five tiny nets vote on your intent. Each pools hashed word and character-ngram embeddings and was trained with hand-written backprop. My confidence is calibrated, and when I'm unsure I ask.
+how do you understand what i say
+whats inside you
+how do you read my messages
+what is inside your head
+how are you built
 
 [help_cmds]
 what commands do you have
@@ -823,6 +928,10 @@ can i teach you things
 how do i add new intents
 can you learn new things
 > In the terminal, type /help. /teach a => b adds a new intent, /fix <intent> corrects my last answer and /why shows which words drove my decision.
+can you learn from me
+do you learn new things
+how do i teach you something
+can i correct you
 
 [remember_help]
 can you remember things
@@ -873,6 +982,10 @@ are you old
 when were you created
 > I'm brand new every time I load: a few thousand parameters and a fresh set of weights.
 > Age is fuzzy for a program, but I get retrained often, so I stay young.
+how long have you been around
+how long have you been alive
+how old is this bot
+what year were you born
 
 [sorry]
 sorry
@@ -887,6 +1000,11 @@ whoops
 > No worries at all.
 > All good!
 > Don't sweat it.
+i apologise
+my apologies
+forgive me please
+i didnt mean that
+sorry about that earlier
 
 [favorite]
 whats your favorite color
@@ -903,6 +1021,10 @@ what are your hobbies
 what do you do for fun
 do you have any interests
 do you have hobbies
+what do you enjoy doing
+what do you like doing for fun
+any hobbies
+what are your interests
 
 [where_live]
 where do you live
@@ -924,6 +1046,8 @@ i dont want to be here anymore
 i want to disappear forever
 i cant go on like this
 > I'm a small program and can't give you the help you deserve here. If you might hurt yourself, please contact your local emergency number or a crisis line right now (in the US, call or text 988), or tell someone you trust. You don't have to go through this alone.
+i am thinking about killing myself
+i cant take it anymore and want to die
 
 [laugh]
 haha
@@ -943,11 +1067,15 @@ you crack me up
 hehehe
 ha ha ha
 thats hilarious
-you are funny
 > Glad that landed!
 > Ha, I have more where that came from.
 >@joke Thank you, I'll be here all week. Want another?
 >@tell_fact Surprising, right? Want another fact?
+rofl lol
+that made me laugh out loud
+ha that was good
+lmao thats good
+hahaha nice
 
 [again]
 again
@@ -964,6 +1092,10 @@ more please
 go again
 hit me again
 > Again what? I haven't done anything repeatable yet.
+another one please
+again please
+one more please
+give me one more
 
 [elaborate]
 tell me more
@@ -985,6 +1117,11 @@ is that true
 >@capabilities =capabilities
 >@mood_bad Take your time. I'm listening.
 >@riddle Riddles don't come with explanations, that would spoil it.
+how come that
+could you explain more
+say more about that
+what do you mean by that
+why is that so
 
 [and_you]
 and you
@@ -1000,6 +1137,10 @@ and u
 >@how_are_you Me? Feeling {mood}.
 >@mood_good Glad we're both doing well. I'm {mood} too.
 >@mood_bad I'm {mood}, but more worried about you.
+how about yourself
+what about you then
+and what about you
+and you then
 
 [recall_user]
 what did i just say
@@ -1044,6 +1185,11 @@ show me your stats
 how many messages have we sent
 whats my streak
 > I'm level {level} ({title}) with {xp} XP. We've swapped {msgs} messages and your streak is {streak} day(s). Try /stats or /dex for more.
+show my streak
+whats my current streak
+how many xp do i have
+what level am i
+check my stats
 
 [ask_dex]
 what is the dex
@@ -1054,6 +1200,10 @@ show my progress
 what is the intent dex
 how much of you have i unlocked
 > You've discovered {dex} of my {dex_total} intents. Type /dex to see which ones.
+show me my progress
+how much have i unlocked so far
+how many have i found
+what is my dex progress
 
 [art]
 draw me something
@@ -1096,6 +1246,10 @@ what do you think of me
 do you remember me
 > We've known each other for {known_days} day(s). I'd call us {bond_label}s: {hearts} ({bond} bond points).
 >@compliment Aww. We're {bond_label}s now: {hearts}.
+are we close
+whats our bond like
+what is our friendship level
+how well do we know each other
 
 [ask_energy]
 are you tired

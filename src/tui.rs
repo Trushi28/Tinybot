@@ -513,7 +513,7 @@ impl Ui {
         left.push(Row::new().styled(204, &"♥".repeat(p.hearts())).styled(240, &"♡".repeat(5 - p.hearts())).styled(250, &format!(" {} ({} pts)", p.bond_label(), p.bond)).pad(LW));
         left.push(Row::new().styled(220, &"▮".repeat(en)).styled(240, &"▯".repeat(5 - en)).styled(250, &format!(" energy {:.0}%", p.energy * 100.0)).pad(LW));
         left.push(Row::new().styled(250, &format!("facts {}/{} · dex {}/{}", p.factbook.len(), app.brain.facts.items.len(), p.dex.len(), app.brain.intents.len())).pad(LW));
-        left.push(Row::new().styled(240, &format!("{} params · {:.0} KB", train::params_label(&app.brain.model), self.kb)).pad(LW));
+        left.push(Row::new().styled(240, &format!("{} · {} params · {:.0} KB", train::model_name(&app.brain.model), train::params_label(&app.brain.model), self.kb)).pad(LW));
         left.truncate(body_h);
         while left.len() < body_h {
             left.push(" ".repeat(LW));

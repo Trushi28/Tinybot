@@ -2,7 +2,8 @@ use crate::rng::Rng;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-pub const BUCKETS: usize = 1 << 14;
+/// size of the shared feature-hash space; embedding tables of 2^bits rows (bits <= 16) mask it down
+pub const BUCKETS: usize = 1 << 16;
 /// Feature ids >= CHAR_BASE are char n-grams (pooled separately from word/bigram features).
 pub const CHAR_BASE: usize = 1 << 20;
 
@@ -96,6 +97,77 @@ fn lexicon() -> &'static HashMap<&'static str, Vec<&'static str>> {
     })
 }
 
+/// Semantic-class feature ids for word `i` ("lonely" leans on what "sad" taught it); a negator
+/// within two words flips the class so "not great" is not "great".
+fn lex_ids(ws: &[String], i: usize) -> Vec<usize> {
+    let Some(classes) = lexicon().get(ws[i].as_str()) else { return vec![] };
+    let negated = ws[i.saturating_sub(2)..i].iter().any(|p| NEGATORS.contains(&p.as_str()));
+    classes.iter().map(|c| hash(&format!("l:{}{c}", if negated { "NOT_" } else { "" }))).collect()
+}
+
+/// Which semantic class an intent is "about": swapping a word for another member of that class
+/// keeps the utterance in the same intent ("im feeling good" -> "im feeling great", both mood_good).
+pub fn class_for_intent(tag: &str) -> Option<&'static str> {
+    Some(match tag {
+        "mood_good" => "pos_feel",
+        "mood_bad" => "neg_feel",
+        "greeting" => "greet",
+        "goodbye" => "farewell",
+        "thanks" => "thank",
+        "yes" => "affirm",
+        "laugh" => "laugh",
+        "joke" => "humor",
+        "weather" => "weather",
+        _ => return None,
+    })
+}
+
+pub fn class_members(class: &str) -> Vec<&'static str> {
+    LEXICON.iter().find(|(c, _)| *c == class).map(|(_, ws)| ws.split_whitespace().collect()).unwrap_or_default()
+}
+
+/// One token's features, split into a word channel (word + semantic classes) and a char-ngram channel.
+#[derive(Clone, Default)]
+pub struct Tok {
+    pub w: Vec<usize>,
+    pub c: Vec<usize>,
+}
+
+pub const MAXT: usize = 16;
+
+pub fn token_features(text: &str) -> Vec<Tok> {
+    let ws = norm_words(text);
+    let mut out = Vec::new();
+    for (i, w) in ws.iter().enumerate().take(MAXT) {
+        let mut t = Tok { w: vec![hash(&format!("w:{w}"))], c: vec![] };
+        t.w.extend(lex_ids(&ws, i));
+        if w != "<num>" {
+            let padded: Vec<char> = format!("<{w}>").chars().collect();
+            for n in 3..=4 {
+                for win in padded.windows(n) {
+                    let g: String = win.iter().collect();
+                    t.c.push(CHAR_BASE + hash(&format!("c:{g}")));
+                }
+            }
+        }
+        out.push(t);
+    }
+    out
+}
+
+/// Everything a model might want from one utterance, computed once.
+#[derive(Clone)]
+pub struct Input {
+    pub flat: Vec<usize>,  // bag of word/bigram/char/lexicon features (the bag-of-features net)
+    pub toks: Vec<Tok>,    // per-token features, in order (the sequence nets)
+}
+
+impl Input {
+    pub fn of(text: &str) -> Input {
+        Input { flat: features(text), toks: token_features(text) }
+    }
+}
+
 /// fastText-style hashed features: word, bigram, char 3/4-grams.
 pub fn features(text: &str) -> Vec<usize> {
     let ws = norm_words(text);
@@ -104,13 +176,7 @@ pub fn features(text: &str) -> Vec<usize> {
     for (i, w) in ws.iter().enumerate() {
         f.push(hash(&format!("w:{w}")));
         f.push(hash(&format!("b:{prev} {w}")));
-        if let Some(classes) = lexicon().get(w.as_str()) {
-            // "not great" must not look like "great": a negator within two words flips the class
-            let negated = ws[i.saturating_sub(2)..i].iter().any(|p| NEGATORS.contains(&p.as_str()));
-            for c in classes {
-                f.push(hash(&format!("l:{}{c}", if negated { "NOT_" } else { "" })));
-            }
-        }
+        f.extend(lex_ids(&ws, i));
         if w != "<num>" {
             let padded: Vec<char> = format!("<{w}>").chars().collect();
             for n in 3..=4 {

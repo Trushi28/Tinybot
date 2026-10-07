@@ -14,8 +14,6 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 const MAX_INPUT_CHARS: usize = 400;
-/// cosine similarity the nearest known phrase needs before we ask "did you mean...?"
-pub const CLARIFY_SIM: f32 = 0.75;
 const GENERIC_FALLBACKS: [&str; 3] = [
     "Hmm, I don't know that one yet. Try rephrasing?",
     "I'm a tiny model, that went over my head.",
@@ -81,6 +79,9 @@ impl Session {
     pub fn new(mut mem: Memory, can_learn: bool) -> Session {
         if let Some(m) = mem.facts.get("_tz").and_then(|v| v.parse::<i32>().ok()) {
             set_tz_override(Some(m));
+        }
+        if let Some(t) = mem.facts.get("_conf").and_then(|v| v.parse::<f32>().ok()) {
+            crate::model::set_answer_threshold(t);
         }
         let persona = Persona::load(&mut mem);
         Session {
@@ -249,6 +250,10 @@ impl Brain {
             // "again" has no `>@prev` replies of its own to seed from, so weight it by hand
             *seed.entry((a.into(), b.into())).or_default() += if b == "again" { 4.0 } else { 1.0 };
         }
+        // anything you can ask for again makes "again" / "another" a likely next message
+        for t in REPEATABLE {
+            *seed.entry((t.to_string(), "again".to_string())).or_default() += 4.0;
+        }
         for it in &intents {
             for (prev, _) in &it.ctx {
                 *seed.entry((prev.clone(), it.tag.clone())).or_default() += 2.0;
@@ -352,7 +357,7 @@ impl Brain {
             ("{time}", clock()),
             ("{greet}", greet_word().to_string()),
             ("{daypart}", daypart().to_string()),
-            ("{params}", { let n = self.model.param_report().2; if n >= 1_000_000 { format!("{:.2}M", n as f32 / 1e6) } else { format!("{}k", n / 1000) } }),
+            ("{params}", { let n = self.model.nominal_params(); if n >= 1_000_000 { format!("{:.2}M", n as f32 / 1e6) } else { format!("{}k", n / 1000) } }),
             ("{tz}", tz_label()),
             ("{date}", fmt_date(today())),
             ("{weekday}", weekday(today()).to_string()),
@@ -705,9 +710,12 @@ impl Brain {
         let debug = format!("[{} | cov {:.2}]", self.top3(&pred.probs), pred.cov);
         s.last_pred = Some(pred.probs.clone());
 
-        // safety first: never gated by sulking, clarification or games
+        // safety first: never gated by sulking, clarification or games. This is the network's second opinion
+        // after the keyword net above, so it must not fire on skill-style input: numbers ("10 km to miles")
+        // pushed a small model into the crisis class once, so digits and very short inputs are excluded
+        // and it needs more than a vague hunch.
         if let Decision::Answer(k) | Decision::Clarify(k) = decision {
-            if self.model.tags[k] == "crisis" {
+            if self.model.tags[k] == "crisis" && pred.probs[k] >= 0.35 && n_words >= 3 && !text.chars().any(|c| c.is_ascii_digit()) {
                 s.pending = Pending::None;
                 let (t, _) = self.answer(s, k, text);
                 let mut r = Reply::skill(t, "crisis");
@@ -821,7 +829,7 @@ impl Brain {
             Decision::Clarify(k) => match self.nearest(text, k) {
                 // only ask when the closest known phrase is genuinely close: a nonsense
                 // "did you mean...?" is worse than admitting it doesn't know
-                Some((ph, sim)) if sim >= CLARIFY_SIM => {
+                Some((ph, sim)) if sim >= self.model.clarify_sim => {
                     let msg = format!("Did you mean something like \"{ph}\"? (yes/no)");
                     s.pending = Pending::Confirm { tag: k, phrase: text.to_string() };
                     Reply::skill(msg, "clarify")
