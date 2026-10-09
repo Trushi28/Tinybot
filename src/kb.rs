@@ -16,13 +16,136 @@ pub const MIN_COVERAGE: f32 = 0.7;
 
 /// words that carry no topic: dropped from queries and documents
 const STOP: &[&str] = &[
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "am", "of", "in", "on", "at", "to", "for", "and", "or", "but", "it", "its",
-    "this", "that", "these", "those", "do", "does", "did", "you", "your", "yours", "me", "my", "mine", "we", "us", "our", "they", "he", "she", "him",
-    "her", "what", "whats", "who", "whos", "whom", "where", "when", "why", "how", "which", "can", "could", "would", "should", "will", "shall", "tell",
-    "about", "explain", "define", "describe", "give", "know", "please", "there", "with", "as", "by", "from", "have", "has", "had", "not", "no", "yes",
-    "some", "any", "more", "also", "just", "really", "very", "so", "if", "then", "than", "too", "want", "need", "like", "let", "lets", "thing",
-    "things", "something", "work", "works", "mean", "means", "meaning", "live", "lives", "many", "much", "long", "big", "old", "far", "fast", "large",
-    "small", "fact", "facts", "trivia", "interesting", "i", "im", "ive", "id", "ill", "name", "called", "time", "speak", "speaks", "spoken", "say",
+    "a",
+    "an",
+    "the",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "am",
+    "of",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "and",
+    "or",
+    "but",
+    "it",
+    "its",
+    "this",
+    "that",
+    "these",
+    "those",
+    "do",
+    "does",
+    "did",
+    "you",
+    "your",
+    "yours",
+    "me",
+    "my",
+    "mine",
+    "we",
+    "us",
+    "our",
+    "they",
+    "he",
+    "she",
+    "him",
+    "her",
+    "what",
+    "whats",
+    "who",
+    "whos",
+    "whom",
+    "where",
+    "when",
+    "why",
+    "how",
+    "which",
+    "can",
+    "could",
+    "would",
+    "should",
+    "will",
+    "shall",
+    "tell",
+    "about",
+    "explain",
+    "define",
+    "describe",
+    "give",
+    "know",
+    "please",
+    "there",
+    "with",
+    "as",
+    "by",
+    "from",
+    "have",
+    "has",
+    "had",
+    "not",
+    "no",
+    "yes",
+    "some",
+    "any",
+    "more",
+    "also",
+    "just",
+    "really",
+    "very",
+    "so",
+    "if",
+    "then",
+    "than",
+    "too",
+    "want",
+    "need",
+    "like",
+    "let",
+    "lets",
+    "thing",
+    "things",
+    "something",
+    "work",
+    "works",
+    "mean",
+    "means",
+    "meaning",
+    "live",
+    "lives",
+    "many",
+    "much",
+    "long",
+    "big",
+    "old",
+    "far",
+    "fast",
+    "large",
+    "small",
+    "fact",
+    "facts",
+    "trivia",
+    "interesting",
+    "i",
+    "im",
+    "ive",
+    "id",
+    "ill",
+    "name",
+    "called",
+    "time",
+    "speak",
+    "speaks",
+    "spoken",
+    "say",
 ];
 
 /// one topic as written in a file (or built from a fact)
@@ -67,12 +190,18 @@ fn stem(w: &str) -> String {
         s.push('y');
     } else if n > 4 && s.ends_with("es") {
         s.truncate(n - 2);
-    } else if n > 3 && s.ends_with('s') && !(s.ends_with("ss") || s.ends_with("us") || s.ends_with("is")) {
+    } else if n > 3
+        && s.ends_with('s')
+        && !(s.ends_with("ss") || s.ends_with("us") || s.ends_with("is"))
+    {
         s.truncate(n - 1);
     } else if n > 5 && s.ends_with("ing") {
         s.truncate(n - 3);
         let cs: Vec<char> = s.chars().collect();
-        if cs.len() > 2 && cs[cs.len() - 1] == cs[cs.len() - 2] && !matches!(cs[cs.len() - 1], 'l' | 's') {
+        if cs.len() > 2
+            && cs[cs.len() - 1] == cs[cs.len() - 2]
+            && !matches!(cs[cs.len() - 1], 'l' | 's')
+        {
             s.pop();
         }
     } else if n > 4 && s.ends_with("ed") {
@@ -121,12 +250,18 @@ pub fn parse(src: &str, out: &mut Vec<Raw>) {
             continue;
         }
         if let Some(h) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            let (title, aliases) = h.split_once('|').map(|(a, b)| (a.trim(), b.trim())).unwrap_or((h.trim(), ""));
+            let (title, aliases) = h
+                .split_once('|')
+                .map(|(a, b)| (a.trim(), b.trim()))
+                .unwrap_or((h.trim(), ""));
             if title.is_empty() {
                 cur = None;
                 continue;
             }
-            let idx = match out.iter().position(|r| !r.fact && r.title.eq_ignore_ascii_case(title)) {
+            let idx = match out
+                .iter()
+                .position(|r| !r.fact && r.title.eq_ignore_ascii_case(title))
+            {
                 Some(i) => {
                     if !aliases.is_empty() {
                         out[i].aliases.push(' ');
@@ -135,7 +270,12 @@ pub fn parse(src: &str, out: &mut Vec<Raw>) {
                     i
                 }
                 None => {
-                    out.push(Raw { title: title.to_string(), aliases: aliases.to_string(), lines: vec![], fact: false });
+                    out.push(Raw {
+                        title: title.to_string(),
+                        aliases: aliases.to_string(),
+                        lines: vec![],
+                        fact: false,
+                    });
                     out.len() - 1
                 }
             };
@@ -155,7 +295,12 @@ pub fn load(facts: &[(String, String)]) -> Kb {
         parse(&u, &mut raw);
     }
     for (cat, text) in facts {
-        raw.push(Raw { title: String::new(), aliases: cat.clone(), lines: vec![text.clone()], fact: true });
+        raw.push(Raw {
+            title: String::new(),
+            aliases: cat.clone(),
+            lines: vec![text.clone()],
+            fact: true,
+        });
     }
     Kb::new(raw)
 }
@@ -163,7 +308,14 @@ pub fn load(facts: &[(String, String)]) -> Kb {
 /// `/know topic => text`: append to kb_user.txt (same topic again adds another line). false if nothing valid to save.
 pub fn append_user(topic: &str, text: &str) -> bool {
     let clean = |s: &str, max: usize| -> String {
-        s.chars().filter(|c| !c.is_control() && !matches!(c, '[' | ']' | '|')).take(max).collect::<String>().trim().trim_start_matches('#').trim().to_string()
+        s.chars()
+            .filter(|c| !c.is_control() && !matches!(c, '[' | ']' | '|'))
+            .take(max)
+            .collect::<String>()
+            .trim()
+            .trim_start_matches('#')
+            .trim()
+            .to_string()
     };
     let (t, x) = (clean(topic, 60), clean(text, 300));
     if t.is_empty() || x.is_empty() {
@@ -207,10 +359,25 @@ impl Kb {
                 *df.entry(t.clone()).or_default() += 1;
             }
             let len: f32 = tf.values().sum();
-            entries.push(Entry { lines: r.lines, line_terms, key_terms, tf, len, fact: r.fact });
+            entries.push(Entry {
+                lines: r.lines,
+                line_terms,
+                key_terms,
+                tf,
+                len,
+                fact: r.fact,
+            });
         }
-        let avg_len = if entries.is_empty() { 1.0 } else { entries.iter().map(|e| e.len).sum::<f32>() / entries.len() as f32 };
-        Kb { entries, df, avg_len: avg_len.max(1.0) }
+        let avg_len = if entries.is_empty() {
+            1.0
+        } else {
+            entries.iter().map(|e| e.len).sum::<f32>() / entries.len() as f32
+        };
+        Kb {
+            entries,
+            df,
+            avg_len: avg_len.max(1.0),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -246,7 +413,9 @@ impl Kb {
             return None;
         }
         let low = query.to_lowercase();
-        let fact_ok = low.split(|c: char| !c.is_alphanumeric()).any(|w| matches!(w, "about" | "fact" | "facts" | "trivia" | "interesting"));
+        let fact_ok = low
+            .split(|c: char| !c.is_alphanumeric())
+            .any(|w| matches!(w, "about"));
         let mut seen = HashSet::new();
         let mut known: Vec<String> = Vec::new();
         let mut unknown = 0usize;
@@ -307,13 +476,23 @@ impl Kb {
         let e = &self.entries[entry];
         let (mut line, mut top) = (0usize, -1.0f32);
         for (li, lt) in e.line_terms.iter().enumerate() {
-            let ov: f32 = known.iter().zip(&q_idf).filter(|&(t, _)| lt.contains(t) || e.key_terms.contains(t)).map(|(_, w)| *w).sum();
+            let ov: f32 = known
+                .iter()
+                .zip(&q_idf)
+                .filter(|&(t, _)| lt.contains(t) || e.key_terms.contains(t))
+                .map(|(_, w)| *w)
+                .sum();
             if ov > top + 1e-6 {
                 top = ov;
                 line = li;
             }
         }
-        Some(Hit { entry, line, coverage, keyword_hit })
+        Some(Hit {
+            entry,
+            line,
+            coverage,
+            keyword_hit,
+        })
     }
 
     /// (text, next line to offer for "more")
@@ -333,7 +512,14 @@ impl Kb {
     pub fn more(&self, entry: usize, idx: usize) -> Option<(String, Option<usize>)> {
         let e = self.entries.get(entry)?;
         let t = e.lines.get(idx)?.clone();
-        Some((t, if idx + 1 < e.lines.len() { Some(idx + 1) } else { None }))
+        Some((
+            t,
+            if idx + 1 < e.lines.len() {
+                Some(idx + 1)
+            } else {
+                None
+            },
+        ))
     }
 }
 
@@ -354,7 +540,9 @@ mod tests {
     }
 
     fn ask(k: &Kb, q: &str) -> Option<String> {
-        k.lookup(q).filter(|h| h.coverage >= MIN_COVERAGE).map(|h| k.answer(&h).0)
+        k.lookup(q)
+            .filter(|h| h.coverage >= MIN_COVERAGE)
+            .map(|h| k.answer(&h).0)
     }
 
     #[test]
@@ -363,7 +551,10 @@ mod tests {
         assert_eq!(stem("houses"), stem("house"));
         assert_eq!(stem("programming"), stem("program"));
         assert_eq!(stem("countries"), stem("country"));
-        assert_eq!(terms("What's the capital of France?"), vec!["capital".to_string(), "franc".to_string()]);
+        assert_eq!(
+            terms("What's the capital of France?"),
+            vec!["capital".to_string(), "franc".to_string()]
+        );
     }
 
     #[test]
@@ -391,8 +582,16 @@ mod tests {
     #[test]
     fn picks_the_line_that_answers() {
         let k = kb();
-        assert!(ask(&k, "how many people live in france").unwrap().contains("68 million"));
-        assert!(ask(&k, "what language do they speak in brazil").unwrap().contains("Portuguese"));
+        assert!(
+            ask(&k, "how many people live in france")
+                .unwrap()
+                .contains("68 million")
+        );
+        assert!(
+            ask(&k, "what language do they speak in brazil")
+                .unwrap()
+                .contains("Portuguese")
+        );
     }
 
     #[test]
@@ -416,14 +615,22 @@ mod tests {
             "asdf qwer zxcv",
             "",
         ] {
-            assert!(ask(&k, q).is_none(), "{q:?} should not be answered: {:?}", ask(&k, q));
+            assert!(
+                ask(&k, q).is_none(),
+                "{q:?} should not be answered: {:?}",
+                ask(&k, q)
+            );
         }
     }
 
     #[test]
     fn facts_only_answer_when_asked_about() {
         let k = kb();
-        assert!(ask(&k, "tell me about octopuses").unwrap().contains("three hearts"));
+        assert!(
+            ask(&k, "tell me about octopuses")
+                .unwrap()
+                .contains("three hearts")
+        );
         assert!(ask(&k, "octopus hearts").is_none());
     }
 
@@ -441,11 +648,18 @@ mod tests {
     #[test]
     fn user_topics_merge_by_title() {
         let mut raw = Vec::new();
-        parse("[Zorp | planet]\nZorp is a made-up planet.\n[zorp]\nIt has two suns.\n", &mut raw);
+        parse(
+            "[Zorp | planet]\nZorp is a made-up planet.\n[zorp]\nIt has two suns.\n",
+            &mut raw,
+        );
         assert_eq!(raw.len(), 1);
         assert_eq!(raw[0].lines.len(), 2);
         let k = Kb::new(raw);
         assert!(ask(&k, "what is zorp").unwrap().contains("made-up"));
-        assert!(ask(&k, "how many suns does zorp have").unwrap().contains("two suns"));
+        assert!(
+            ask(&k, "how many suns does zorp have")
+                .unwrap()
+                .contains("two suns")
+        );
     }
 }
