@@ -731,7 +731,7 @@ impl Ensemble {
             if !(2..=512).contains(&dim) || !(2..=1024).contains(&hid) || !(6..=16).contains(&bits) || ch > 1024 || (arch != Arch::Bow && ch == 0) {
                 return None;
             }
-            let cfg = Cfg { arch, dim, hid, bits: bits as u32, ch, epochs: 0 };
+            let cfg = Cfg { arch, dim, hid, bits: bits as u32, ch, epochs: student_epochs(arch) };
             let mut net = Net::new(c, cfg, &mut Rng::new(0));
             let rows = 1usize << bits;
             let touched = unpack_bits(&mut r, rows)?;

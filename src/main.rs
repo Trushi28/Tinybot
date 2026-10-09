@@ -1,6 +1,7 @@
 //! tinybot: a small intent-routing chatbot in pure Rust, zero dependencies.
 //!
-//! Engine   : 5-net teacher ensemble distilled into ONE compact int8 student (~64k params)
+//! Engine   : 5-net teacher ensemble distilled into ONE compact int8 student (68k to 4M params)
+//! Knowledge: BM25 retrieval over kb.txt, kb_user.txt (/know) and facts.txt for open questions
 //! Context  : 24-turn memory, `>@prev` replies, learned intent-flow prior, follow-up resolution
 //!            ("and in meters?", "double that", "again", "what did I just say")
 //! Skills   : calculator, units, dates, dice, memory, todo list (all from scratch)
@@ -13,6 +14,7 @@ mod calc;
 mod cmds;
 mod facts;
 mod intents;
+mod kb;
 mod model;
 mod persona;
 mod rng;
@@ -39,7 +41,8 @@ fn load_or_train(o: &train::Opts) -> Brain {
     let intents = intents::load();
     let (tags, ex) = intents::flatten(&intents);
     let scfg = train::student_cfg(o.arch, o.tier, intents.len());
-    let want = model::data_hash(&tags, &train::augment(&ex, &tags, train::SEED), model::cfg_salt(&scfg));
+    let used = if o.aug { train::augment(&ex, &tags, train::SEED) } else { ex.clone() };
+    let want = model::data_hash(&tags, &used, model::cfg_salt(&scfg));
     let path = o.path();
     let m = match Ensemble::load(&path) {
         Some(m) if m.data_hash == want && m.tags == tags => m,
@@ -71,7 +74,7 @@ fn cmd_plain(o: &train::Opts) {
         if stdin.lock().read_line(&mut line).unwrap_or(0) == 0 {
             break;
         }
-        let line = line.trim().to_string();
+        let line: String = line.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string();
         if line.is_empty() {
             continue;
         }

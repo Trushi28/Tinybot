@@ -1,0 +1,375 @@
+# TinyBot knowledge base. Format:
+#   [Topic | extra keywords]
+#   one fact per line. The first line is the definition; "more" shows the next lines.
+# Edit freely. In chat, /know topic => text adds a line without retraining.
+# Keep lines short and put the words people will ask with (capital, population, language...) in them.
+
+# ---------------- countries
+[France | paris french]
+France is a country in Western Europe, and its capital is Paris.
+About 68 million people live in France. The language is French and the currency is the euro.
+Paris sits on the Seine river and is home to the Eiffel Tower and the Louvre.
+
+[Germany | berlin german]
+Germany is a country in central Europe, and its capital is Berlin.
+About 84 million people live in Germany, the most of any country in the European Union. The language is German and the currency is the euro.
+
+[Japan | tokyo japanese]
+Japan is an island country in East Asia, and its capital is Tokyo.
+About 124 million people live in Japan. The language is Japanese and the currency is the yen.
+The highest mountain in Japan is Mount Fuji at 3,776 metres.
+
+[India | delhi indian]
+India is a country in South Asia, and its capital is New Delhi.
+About 1.4 billion people live in India, which makes it the most populous country on Earth.
+Hindi and English are the main official languages, and there are many regional languages. The currency is the rupee.
+
+[United States | usa america american washington]
+The United States is a country in North America made of 50 states, and its capital is Washington, D.C.
+About 335 million people live in the United States. The currency is the US dollar and the main language is English.
+
+[United Kingdom | uk britain british england london]
+The United Kingdom is a country in Europe made of England, Scotland, Wales and Northern Ireland, and its capital is London.
+About 68 million people live in the United Kingdom. The currency is the pound sterling.
+
+[Australia | canberra sydney australian]
+Australia is both a country and a continent, and its capital is Canberra, not Sydney.
+Sydney is the largest city. About 26 million people live in Australia and the main language is English.
+
+[Brazil | brasilia brazilian]
+Brazil is the largest country in South America, and its capital is Brasília.
+About 215 million people live in Brazil. Portuguese is the official language, and the currency is the real.
+Most of the Amazon rainforest is in Brazil.
+
+[China | beijing chinese]
+China is a country in East Asia, and its capital is Beijing.
+About 1.4 billion people live in China. The main language is Mandarin and the currency is the yuan.
+
+[Canada | ottawa canadian]
+Canada is a country in North America and the second largest in the world by area, and its capital is Ottawa.
+About 40 million people live in Canada. English and French are the official languages.
+
+[Italy | rome italian]
+Italy is a country in southern Europe, and its capital is Rome.
+About 59 million people live in Italy. The language is Italian and the currency is the euro. The Vatican City is a separate country inside Rome.
+
+[Spain | madrid spanish]
+Spain is a country in southwestern Europe, and its capital is Madrid.
+About 48 million people live in Spain. The language is Spanish and the currency is the euro.
+
+[Egypt | cairo egyptian]
+Egypt is a country in northeast Africa, and its capital is Cairo.
+The Nile river runs through Egypt, and the pyramids of Giza are near Cairo.
+
+[Russia | moscow russian]
+Russia is the largest country in the world by area, and its capital is Moscow.
+About 144 million people live in Russia and the language is Russian.
+
+[Mexico | mexican]
+Mexico is a country in North America, and its capital is Mexico City.
+About 129 million people live in Mexico and the language is Spanish.
+
+[Nigeria | abuja lagos nigerian]
+Nigeria is the most populous country in Africa, and its capital is Abuja.
+Lagos is the largest city. About 220 million people live in Nigeria and the official language is English.
+
+[South Africa | pretoria cape town bloemfontein]
+South Africa is a country at the southern tip of Africa with three capitals: Pretoria, Cape Town and Bloemfontein.
+Pretoria is the executive capital, Cape Town the legislative one and Bloemfontein the judicial one.
+
+# ---------------- geography
+[Mount Everest | tallest highest mountain height himalaya nepal]
+Mount Everest is Earth's highest mountain above sea level, about 8,849 metres tall.
+It is on the border of Nepal and Tibet. Edmund Hillary and Tenzing Norgay made the first confirmed climb in 1953.
+
+[Pacific Ocean | largest ocean]
+The Pacific is the largest and deepest ocean, covering about a third of Earth's surface.
+
+[Nile | river longest]
+The Nile is one of the longest rivers in the world, about 6,650 kilometres, flowing north through Egypt into the Mediterranean Sea.
+
+[Amazon | river rainforest]
+The Amazon is the largest river in the world by water volume and flows through the biggest rainforest on Earth, mostly in Brazil.
+
+[Sahara | desert]
+The Sahara in North Africa is the largest hot desert in the world, about the size of the United States.
+
+[Antarctica | continent ice south pole]
+Antarctica is the coldest, driest and windiest continent. It is almost entirely covered by ice and has no permanent population.
+
+[Continents | continent seven]
+There are seven continents: Africa, Antarctica, Asia, Australia (Oceania), Europe, North America and South America.
+
+[Time zone | timezone utc gmt clock]
+The world is divided into time zones, mostly one hour apart, measured as offsets from UTC.
+India is UTC+5:30 and Japan is UTC+9.
+
+# ---------------- space
+[Solar System | planets planet orbit]
+The Solar System has eight planets orbiting the Sun: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus and Neptune.
+Pluto is classed as a dwarf planet. The Solar System formed about 4.6 billion years ago.
+
+[Sun | star]
+The Sun is the star at the centre of the Solar System and holds about 99.8 percent of its mass.
+Its surface is around 5,500 degrees Celsius and it is about 4.6 billion years old.
+
+[Moon | satellite tides lunar]
+The Moon is Earth's only natural satellite, about 384,400 kilometres away.
+Its gravity causes the ocean tides, and it takes about 27 days to orbit Earth.
+
+[Moon landing | apollo armstrong aldrin]
+Apollo 11 landed the first humans on the Moon on 20 July 1969.
+Neil Armstrong stepped out first, followed by Buzz Aldrin, while Michael Collins stayed in orbit.
+
+[Earth | home planet]
+Earth is the third planet from the Sun and the only place known to have life.
+About 71 percent of its surface is water and it is about 4.5 billion years old.
+
+[Mars | red]
+Mars is the fourth planet from the Sun, red because of iron oxide in its soil.
+It has two small moons, Phobos and Deimos, and Olympus Mons, the tallest volcano in the Solar System at about 22 kilometres.
+
+[Jupiter | gas giant]
+Jupiter is the largest planet, a gas giant with more than 1,300 Earths' worth of volume.
+Its Great Red Spot is a storm that has lasted for centuries, and it has dozens of moons.
+
+[Saturn | rings]
+Saturn is the second largest planet, a gas giant famous for its bright rings made of ice and rock.
+
+[Venus | hottest]
+Venus is the hottest planet, about 465 degrees Celsius, because its thick carbon dioxide atmosphere traps heat.
+It spins backwards compared with most planets.
+
+[Mercury | closest]
+Mercury is the smallest planet and the closest to the Sun. Its year lasts only 88 Earth days.
+
+[Black hole | event horizon singularity]
+A black hole is a region of space where gravity is so strong that nothing, not even light, can escape.
+Most form when a massive star collapses. The first picture of one was released in 2019.
+
+[Milky Way | galaxy]
+The Milky Way is the galaxy that contains the Solar System, a spiral of hundreds of billions of stars.
+The Sun is about 26,000 light-years from its centre.
+
+[Big Bang | universe origin age]
+The Big Bang is the theory that the universe expanded from an extremely hot, dense state about 13.8 billion years ago.
+
+[Light year | lightyear]
+A light-year is the distance light travels in one year, about 9.46 trillion kilometres.
+
+[Speed of light | light fast]
+Light travels at about 299,792 kilometres per second in a vacuum, and nothing with mass can reach that speed.
+
+[Gravity | newton einstein]
+Gravity is the force that pulls masses toward each other. On Earth it accelerates things at about 9.8 metres per second squared.
+Newton described it as a force; Einstein's general relativity describes it as the curving of spacetime.
+
+# ---------------- science
+[Photosynthesis | plants chlorophyll chloroplast]
+Photosynthesis is how plants, algae and some bacteria use light, water and carbon dioxide to make sugar and oxygen.
+It happens in chloroplasts, where chlorophyll absorbs the light. It supplies most of the oxygen we breathe.
+
+[Atom | proton neutron electron]
+An atom is the smallest unit of a chemical element: a nucleus of protons and neutrons with electrons around it.
+
+[DNA | gene genetic helix]
+DNA is the molecule that carries genetic instructions in living things, shaped like a double helix.
+It is written in four bases: A, T, G and C.
+
+[Cell | cells mitochondria]
+A cell is the basic unit of life. Mitochondria inside cells produce most of their energy.
+
+[Evolution | darwin natural selection]
+Evolution is the change in the inherited traits of populations over generations, driven largely by natural selection.
+Charles Darwin published On the Origin of Species in 1859.
+
+[Water cycle | rain evaporation]
+The water cycle moves water through evaporation, condensation, precipitation and collection, driven by the Sun.
+
+[Periodic table | elements chemistry mendeleev]
+The periodic table arranges the chemical elements by atomic number. There are 118 known elements.
+Dmitri Mendeleev published the first widely used version in 1869.
+
+[Electricity | current voltage]
+Electricity is the flow of electric charge. Current is measured in amperes and voltage in volts.
+
+[Climate change | global warming greenhouse]
+Climate change is the long-term warming of Earth, mostly from burning fossil fuels, which release carbon dioxide and other greenhouse gases.
+The planet is about 1.1 degrees Celsius warmer than before the industrial era.
+
+[Quantum mechanics | quantum entanglement physics]
+Quantum mechanics is the physics of atoms and light, where particles behave like waves and outcomes are probabilities.
+Entanglement links two particles so that measuring one is correlated with the other, but it cannot be used to send messages faster than light.
+
+[Vaccine | vaccination immunity]
+A vaccine trains the immune system to recognise a germ using a harmless piece or weakened form of it.
+
+[Temperature | celsius fahrenheit kelvin freezing boiling]
+Water freezes at 0 degrees Celsius (32 Fahrenheit) and boils at 100 Celsius (212 Fahrenheit) at sea level.
+Absolute zero, the coldest possible temperature, is minus 273.15 Celsius or 0 kelvin.
+
+[Newton's laws | motion inertia force]
+Newton's three laws of motion: objects keep moving unless a force acts, force equals mass times acceleration, and every action has an equal and opposite reaction.
+
+[Human body | bones heart organs skeleton]
+An adult human body has 206 bones.
+The heart has four chambers and beats roughly 100,000 times a day.
+
+# ---------------- maths
+[Pi | circle circumference]
+Pi is the ratio of a circle's circumference to its diameter, about 3.14159. It is irrational, so its digits never repeat or end.
+
+[Prime number | primes]
+A prime number is a whole number greater than 1 that is divisible only by 1 and itself. 2 is the only even prime.
+There are infinitely many primes, as Euclid proved around 300 BC.
+
+[Pythagorean theorem | pythagoras triangle hypotenuse]
+In a right triangle, the square of the hypotenuse equals the sum of the squares of the other two sides: a² + b² = c².
+
+[Fibonacci sequence | fibonacci]
+The Fibonacci sequence starts 0, 1, 1, 2, 3, 5, 8, 13 and each number is the sum of the two before it.
+
+[Binary | base two bits]
+Binary is base 2, using only the digits 0 and 1. Computers use it because a switch is either off or on. For example 1010 in binary is 10.
+
+[Hexadecimal | hex base sixteen]
+Hexadecimal is base 16, using the digits 0 to 9 and the letters A to F. Colours like #FF0000 are written in it.
+
+[Big O notation | complexity runtime]
+Big O notation describes how an algorithm's running time grows with the size of its input, for example O(1), O(log n), O(n) and O(n²).
+
+# ---------------- computing
+[Computer | pc hardware]
+A computer is a machine that follows instructions to process data. It is made of a processor, memory, storage and input and output devices.
+
+[CPU | processor cores]
+The CPU, or processor, executes a program's instructions. Modern ones have several cores and run at billions of cycles per second.
+
+[RAM | memory]
+RAM is the fast working memory a computer uses for running programs. Its contents are lost when the power goes off.
+
+[Internet | network tcp ip]
+The internet is the global network of networks that computers use to talk to each other using protocols like TCP/IP.
+The web is just one service that runs on it.
+
+[World Wide Web | web www browser http berners-lee]
+The World Wide Web is a system of linked pages served over HTTP and read in browsers. It was invented by Tim Berners-Lee at CERN in 1989.
+
+[Artificial intelligence | ai]
+Artificial intelligence is software that does tasks that normally need human intelligence, like recognising speech, images or language.
+
+[Machine learning | training data model]
+Machine learning is a way of building software that learns patterns from examples instead of being programmed with explicit rules.
+
+[Neural network | neurons layers weights]
+A neural network is a stack of layers of simple units whose weights are tuned from data using backpropagation and gradient descent.
+I am one, a very small one: a few hundred thousand weights that route your message to an intent.
+
+[Gradient descent | backpropagation backprop optimizer loss]
+Gradient descent trains a model by repeatedly nudging each weight in the direction that lowers the loss.
+Backpropagation is the chain-rule calculation that tells it which direction that is.
+
+[Large language model | llm chatgpt claude gpt gemini]
+A large language model is a neural network, usually a transformer, trained on huge amounts of text to predict the next word. Chat assistants like ChatGPT and Claude are built on them.
+I am not one. I route your message to an intent, run a few skills and look things up in a small knowledge base, so I cannot write new text the way they do.
+
+[Transformer | attention]
+The transformer is a neural network design built around attention, introduced in 2017. It is the basis of modern language models.
+
+[Operating system | os windows macos android]
+An operating system manages a computer's hardware and runs programs for you. Examples are Windows, macOS, Linux and Android.
+
+[Linux | tux torvalds]
+Linux is a free, open-source operating system kernel created by Linus Torvalds in 1991. It runs most servers and Android phones.
+
+[Kernel | syscall]
+A kernel is the core of an operating system. It schedules programs, manages memory and talks to hardware.
+
+[Compiler | compile parser]
+A compiler translates source code into machine code or another language. Typical stages are lexing, parsing, optimising and code generation.
+
+[Git | version control github]
+Git is a distributed version control system that tracks changes to files. Linus Torvalds created it in 2005.
+
+[Rust programming language | rustc cargo borrow checker ownership]
+Rust is a systems programming language that guarantees memory safety without a garbage collector, using ownership and borrowing.
+Its first stable release was in 2015 and its build tool is called Cargo.
+
+[Python programming language | python]
+Python is a readable, high-level programming language created by Guido van Rossum in 1991. It is popular for scripting, data science and AI.
+
+[C programming language | clang]
+C is a low-level programming language created by Dennis Ritchie at Bell Labs in the early 1970s. Unix was written in it.
+
+[JavaScript | js node browser]
+JavaScript is the programming language of web browsers, and with Node.js it also runs on servers.
+
+[API | interface endpoint]
+An API is an interface that lets one program use another's features, for example a web service with documented endpoints.
+
+[Database | sql tables]
+A database stores organised data so it can be searched and updated quickly. Many use SQL, a language for querying tables.
+
+[Encryption | cryptography cipher aes rsa https]
+Encryption scrambles data so that only someone with the right key can read it. HTTPS, AES and RSA are common examples.
+
+[Bit and byte | bit byte kilobyte]
+A bit is a single 0 or 1. A byte is 8 bits.
+
+[Hash function | hash checksum]
+A hash function turns any input into a fixed-size number. It is used in hash tables, checksums and passwords. I use hashing to turn words into feature ids.
+
+[Algorithm | procedure]
+An algorithm is a step-by-step procedure for solving a problem, like a recipe that a computer can follow.
+
+[Recursion | recursive]
+Recursion is when a function solves a problem by calling itself on a smaller piece of it, with a base case that stops the calls.
+
+[Open source | license]
+Open source software publishes its code under a licence that lets anyone read, use and change it.
+
+[Blockchain | bitcoin crypto ledger]
+A blockchain is a shared ledger of blocks linked by hashes so past entries cannot be changed quietly. Bitcoin, launched in 2009, was the first big one.
+
+[Cloud computing | cloud servers aws]
+Cloud computing means renting servers, storage and services over the internet instead of owning the hardware.
+
+# ---------------- history
+[World War II | ww2 second world war]
+World War II ran from 1939 to 1945 and was fought between the Allies and the Axis powers.
+Germany surrendered in May 1945 and Japan in September 1945.
+
+[World War I | ww1 first world war]
+World War I ran from 1914 to 1918 and ended with an armistice on 11 November 1918.
+
+[Roman Empire | rome caesar augustus]
+The Roman Empire began under Augustus in 27 BC. The western half fell in 476 AD, and the eastern half lasted until 1453.
+
+[Industrial Revolution | steam factories]
+The Industrial Revolution began in Britain in the late 1700s, when steam power and factories replaced hand production.
+
+[Printing press | gutenberg]
+Johannes Gutenberg built the first European movable-type printing press around 1440.
+
+[French Revolution | bastille]
+The French Revolution began in 1789 with the storming of the Bastille on 14 July and ended the monarchy.
+
+[Indian independence | independence gandhi 1947]
+India became independent from British rule on 15 August 1947, after a long movement led by figures like Mahatma Gandhi.
+
+[Ancient Egypt | pyramids pharaoh giza]
+The great pyramids of Giza were built as tombs for pharaohs around 2600 to 2500 BC.
+
+# ---------------- everyday
+[Leap year | february 29]
+A leap year has 366 days, with an extra 29 February. It occurs every four years, except century years not divisible by 400.
+
+[Languages | language speakers]
+Mandarin Chinese has the most native speakers, and English has the most speakers overall.
+
+[World population | people humans billion]
+About 8 billion people live on Earth, a number passed in November 2022.
+
+[Meaning of life | purpose philosophy]
+There is no agreed answer. Philosophers suggest purpose comes from relationships, from what you create, or from faith.
+In The Hitchhiker's Guide to the Galaxy the answer is 42, which nobody can interpret.

@@ -314,7 +314,8 @@ fn crisis_safety_net_does_not_depend_on_the_network() {
     }
     // ordinary talk about dying batteries must not trip it
     assert!(!crate::skills::crisis_text("my phone is dying and the game is killing me"));
-    assert!(!crate::skills::crisis_text("what is the suicide squad movie about") || true);
+    assert!(!crate::skills::crisis_text("i will spend it all on pizza"));
+    assert!(!crate::skills::crisis_text("lets send it all to the printer"));
 }
 
 #[test]
@@ -446,4 +447,61 @@ fn shipped_model_never_mistakes_ordinary_requests_for_a_crisis() {
         let r = brain.reply(&mut s, t);
         assert_ne!(r.tag, "crisis", "{t:?} must not trigger the crisis reply");
     }
+}
+
+
+#[test]
+fn again_works_repeatedly() {
+    let b = real_brain();
+    let mut s = Session::new(Memory::ephemeral(), false);
+    say(b, &mut s, "flip a coin");
+    for _ in 0..3 {
+        let r = say(b, &mut s, "again");
+        assert!(r.contains("Heads") || r.contains("Tails"), "{r}");
+    }
+}
+
+#[test]
+fn names_in_every_shape_the_intent_lists() {
+    for (t, want) in [
+        ("my name is alice", "Alice"), ("this is anna", "Anna"), ("its me tom", "Tom"), ("maria here", "Maria"),
+        ("its priya", "Priya"), ("its maria here", "Maria"), ("call me priya", "Priya"), ("hi im olivia", "Olivia"),
+    ] {
+        assert_eq!(extract_name(t).as_deref(), Some(want), "{t}");
+    }
+    assert_eq!(extract_name("its me"), None);
+    assert_eq!(extract_name("its cold"), None);
+}
+
+#[test]
+fn recall_only_after_a_real_lookup_phrase() {
+    let mut m = Memory::ephemeral();
+    assert!(try_facts("my hat is red", &mut m).is_some());
+    assert!(try_facts("do you like my hat", &mut m).is_none());
+    assert_eq!(try_facts("what is my hat", &mut m).unwrap(), "Your hat is red.");
+}
+
+#[test]
+fn clearing_memory_resets_progress() {
+    let mut m = Memory::ephemeral();
+    let mut p = crate::persona::Persona::load(&mut m);
+    let mut t = Vec::new();
+    p.add_xp(100, &mut t);
+    p.store(&mut m);
+    m.clear();
+    assert_eq!(crate::persona::Persona::load(&mut m).xp, 0);
+}
+
+#[test]
+fn knowledge_base_answers_open_questions_and_continues() {
+    let b = real_brain();
+    let mut s = Session::new(Memory::ephemeral(), false);
+    let r = say(b, &mut s, "what is the capital of france");
+    assert!(r.contains("Paris"), "{r}");
+    let r = say(b, &mut s, "tell me more");
+    assert!(r.contains("68 million"), "{r}");
+    let r = say(b, &mut s, "what is photosyntesis");
+    assert!(r.contains("light"), "{r}");
+    let r = say(b, &mut s, "what is the capital of mars");
+    assert!(!r.contains("Paris") && !r.contains("Canberra"), "{r}");
 }

@@ -752,7 +752,7 @@ pub fn run(app: &mut App) {
         };
         ui.last_input = Instant::now();
         ui.clear_input_rows();
-        let line = line.trim().to_string();
+        let line: String = line.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string();
         if line.is_empty() {
             ui.console.clear();
             ui.draw(app);

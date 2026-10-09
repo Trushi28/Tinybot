@@ -167,7 +167,7 @@ fn find_iso(text: &str) -> Option<i64> {
         let tok = tok.trim_matches(|c: char| !c.is_ascii_digit());
         let b = tok.as_bytes();
         if b.len() == 10 && b[4] == b'-' && b[7] == b'-' {
-            let (y, m, d) = (tok[0..4].parse().ok()?, tok[5..7].parse().ok()?, tok[8..10].parse().ok()?);
+            let (Ok(y), Ok(m), Ok(d)) = (tok[0..4].parse::<i64>(), tok[5..7].parse::<i64>(), tok[8..10].parse::<i64>()) else { continue };
             if valid_ymd(y, m, d) {
                 return Some(days_from_civil(y, m, d));
             }
@@ -306,7 +306,7 @@ impl Memory {
                 if let Some((k, v)) = rest.split_once('=') {
                     if m.facts.len() < MAX_ITEMS + 40 {
                         let k = sanitize(k, 40);
-                        let cap = if k.starts_with('_') { 800 } else { 120 };
+                        let cap = if k.starts_with('_') { 4000 } else { 120 };
                         m.facts.insert(k, sanitize(v, cap));
                     }
                 }
@@ -335,7 +335,10 @@ impl Memory {
         for n in &self.notes {
             out.push_str(&format!("note:{n}\n"));
         }
-        let _ = fs::write(p, out);
+        let tmp = format!("{p}.tmp");
+        if fs::write(&tmp, out).is_ok() {
+            let _ = fs::rename(&tmp, p);
+        }
     }
 
     pub fn clear(&mut self) {
@@ -351,7 +354,7 @@ impl Memory {
 
     pub fn set(&mut self, k: &str, v: &str) -> bool {
         let k = sanitize(k, 40);
-        let v = sanitize(v, if k.starts_with('_') { 800 } else { 120 });
+        let v = sanitize(v, if k.starts_with('_') { 4000 } else { 120 });
         if k.is_empty() || v.is_empty() || (self.facts.len() >= MAX_ITEMS + 40 && !self.facts.contains_key(&k)) {
             return false;
         }
@@ -372,13 +375,20 @@ pub fn capitalize(w: &str) -> String {
 pub fn extract_name(text: &str) -> Option<String> {
     let raw = words(text);
     let low: Vec<String> = raw.iter().map(|w| w.to_lowercase()).collect();
-    const SKIP: [&str; 10] = ["a", "an", "the", "not", "so", "very", "fine", "good", "ok", "okay"];
+    const SKIP: [&str; 21] = ["a", "an", "the", "not", "so", "very", "fine", "good", "ok", "okay", "cold", "hot", "late", "early", "great", "bad", "sad", "tired", "here", "back", "me"];
+    if low.len() == 2 && low[1] == "here" && !SKIP.contains(&low[0].as_str()) {
+        return Some(capitalize(&raw[0]));
+    }
+    if low.len() >= 2 && low[0] == "its" && !SKIP.contains(&low[1].as_str()) && (low.len() == 2 || (low.len() == 3 && low[2] == "here")) {
+        return Some(capitalize(&raw[1]));
+    }
     for i in 0..low.len().saturating_sub(1) {
         let prev = if i > 0 { low[i - 1].as_str() } else { "" };
         let hit = (low[i] == "is" && prev == "name")
             || (low[i] == "am" && prev == "i")
             || low[i] == "im"
-            || (low[i] == "me" && prev == "call");
+            || (low[i] == "me" && (prev == "call" || prev == "its"))
+            || (low[i] == "is" && prev == "this");
         if hit && !SKIP.contains(&low[i + 1].as_str()) {
             return Some(capitalize(&raw[i + 1]));
         }
@@ -414,7 +424,8 @@ pub fn try_facts(text: &str, mem: &mut Memory) -> Option<String> {
     // recall: "what is my K", "do you know my K", "tell me my K"
     if question {
         if let Some(i) = low.iter().position(|w| w == "my") {
-            if i >= 1 && i + 1 < raw.len() && i <= 4 && !low[..i].iter().any(|w| w == "i") {
+            const LEAD: [&str; 18] = ["what", "whats", "is", "s", "tell", "me", "do", "you", "know", "remember", "can", "please", "who", "whos", "was", "did", "say", "again"];
+            if i >= 1 && i + 1 < raw.len() && i <= 4 && low[..i].iter().all(|w| LEAD.contains(&w.as_str())) {
                 let k = join(i + 1, raw.len()).to_lowercase();
                 if k.split(' ').count() <= 4 {
                     return Some(match mem.facts.get(&k) {
@@ -843,8 +854,9 @@ pub fn crisis_text(text: &str) -> bool {
         "point in living", "point in anything", "point in going on", "tired of living", "sick of living", "dont want to wake up", "end everything",
         "not be here anymore", "dont want to exist", "wish i could disappear", "wish i wasnt here", "never been born", "wish i was never born",
         "wish i werent alive", "dont want to be around anymore", "cant do this anymore", "cant take it anymore",
+        "dont wanna live", "dont want to go on", "end my own life",
     ];
-    PHRASES.iter().any(|p| t.contains(&format!(" {p} ")) || (p.len() > 8 && t.contains(p)))
+    PHRASES.iter().any(|p| t.contains(&format!(" {p} ")))
 }
 
 /// Value of "my KEY is VALUE" with the user's own casing and punctuation (words() would split "sky-blue").

@@ -3,6 +3,7 @@
 
 use crate::calc::{convert, convert_followup, fmt_num, try_calc, Conv};
 use crate::art;
+use crate::kb::{Hit, Kb};
 use crate::facts::{self, Facts};
 use crate::persona::{emotion_for, flavour, Persona};
 use crate::intents::Intent;
@@ -55,6 +56,8 @@ pub struct Session {
     pub can_learn: bool,
     pub last_input: Option<String>,
     pub last_pred: Option<Vec<f32>>,
+    /// (topic, next line) of the last knowledge-base answer, so "more" can continue it
+    pub kb_ctx: Option<(usize, usize)>,
     pub history: VecDeque<Turn>,
     /// previous turn's intent, drives `>@prev` replies and the transition prior
     pub prev: Option<String>,
@@ -91,6 +94,7 @@ impl Session {
             can_learn,
             last_input: None,
             last_pred: None,
+            kb_ctx: None,
             history: VecDeque::new(),
             prev: None,
             flow: HashMap::new(),
@@ -165,11 +169,13 @@ pub struct Reply {
     pub won: bool,
     pub toasts: Vec<String>,
     pub emo: &'static str,
+    /// true when this reply re-ran an earlier request ("again")
+    pub again: bool,
 }
 
 impl Reply {
     fn skill(text: String, tag: &str) -> Reply {
-        Reply { text, tag: tag.into(), conf: 1.0, done: false, learn: None, debug: String::new(), won: false, toasts: Vec::new(), emo: "neutral" }
+        Reply { text, tag: tag.into(), conf: 1.0, done: false, learn: None, debug: String::new(), won: false, toasts: Vec::new(), emo: "neutral", again: false }
     }
 }
 
@@ -180,6 +186,7 @@ pub struct Brain {
     /// prior knowledge of which intent tends to follow which (from `>@prev` replies + a few built-ins)
     seed: HashMap<(String, String), f32>,
     pub facts: Facts,
+    pub kb: Kb,
 }
 
 pub struct Analysis {
@@ -232,6 +239,7 @@ fn human(tag: &str) -> String {
         "skill:dice" | "dice" => "dice".into(),
         "skill:memory" => "things about you".into(),
         "skill:notes" => "your notes".into(),
+        "skill:kb" => "general knowledge".into(),
         "skill:timer" => "timers".into(),
         t => t.trim_start_matches("skill:").replace('_', " "),
     }
@@ -259,7 +267,29 @@ impl Brain {
                 *seed.entry((prev.clone(), it.tag.clone())).or_default() += 2.0;
             }
         }
-        Brain { model, intents, index, seed, facts: facts::load() }
+        let facts = facts::load();
+        let pairs: Vec<(String, String)> = facts.items.iter().map(|f| (f.cat.clone(), f.text.clone())).collect();
+        let kb = crate::kb::load(&pairs);
+        Brain { model, intents, index, seed, facts, kb }
+    }
+
+    pub fn reload_kb(&mut self) {
+        let pairs: Vec<(String, String)> = self.facts.items.iter().map(|f| (f.cat.clone(), f.text.clone())).collect();
+        self.kb = crate::kb::load(&pairs);
+    }
+
+    fn kb_reply(&self, s: &mut Session, h: &Hit) -> Reply {
+        let (mut t, next) = self.kb.answer(h);
+        s.kb_ctx = next.map(|n| (h.entry, n));
+        if h.coverage < 0.85 && !h.keyword_hit {
+            t = format!("Closest thing I know: {t}");
+        }
+        if next.is_some() {
+            t.push_str(" (say \"more\" to continue)");
+        }
+        let mut r = Reply::skill(t, "skill:kb");
+        r.conf = h.coverage;
+        r
     }
 
     pub fn tag_idx(&self, tag: &str) -> Option<usize> {
@@ -663,7 +693,10 @@ impl Brain {
                 *s.flow.entry((p, r.tag.clone())).or_default() += 1.0;
             }
         }
-        if REPEATABLE.contains(&r.tag.as_str()) {
+        if r.tag != "skill:kb" {
+            s.kb_ctx = None;
+        }
+        if REPEATABLE.contains(&r.tag.as_str()) && !r.again {
             s.repeatable = Some(text.clone());
         }
         s.prev = if r.tag == "fallback" || r.tag == "clarify" { None } else { Some(r.tag.clone()) };
@@ -810,12 +843,39 @@ impl Brain {
             }
         }
 
+        // knowledge base: "more" continues the last answer; open questions the router isn't sure about land here
+        if let Some((e, i)) = s.kb_ctx {
+            let wants_more = matches!(norm(text).as_str(), "more" | "tell me more" | "go on" | "continue" | "what else" | "keep going" | "more please" | "elaborate" | "go ahead")
+                || matches!(decision, Decision::Answer(k) if self.model.tags[k] == "elaborate");
+            if wants_more {
+                if let Some((mut t, next)) = self.kb.more(e, i) {
+                    s.kb_ctx = next.map(|n| (e, n));
+                    if next.is_some() {
+                        t.push_str(" (say \"more\" to continue)");
+                    }
+                    return Reply::skill(t, "skill:kb");
+                }
+            }
+        }
+        let router_sure = matches!(decision, Decision::Answer(_)) && conf >= 0.85 && pred.cov >= 0.85;
+        if !router_sure {
+            if let Some(h) = self.kb.lookup(text) {
+                let need = if matches!(decision, Decision::Answer(_)) { 0.85 } else { crate::kb::MIN_COVERAGE };
+                if h.coverage >= need {
+                    let mut r = self.kb_reply(s, &h);
+                    r.debug = debug;
+                    return r;
+                }
+            }
+        }
+
         // neural router
         let mut r = match decision {
             Decision::Answer(k) if self.model.tags[k] == "again" => match s.repeatable.clone() {
                 Some(t) if depth == 0 => {
                     let mut inner = self.reply_inner(s, &t, depth + 1);
                     inner.conf = conf;
+                    inner.again = true;
                     return inner;
                 }
                 _ => Reply::skill("Again what? We haven't done anything repeatable yet.".into(), "again"),

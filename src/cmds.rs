@@ -106,6 +106,7 @@ pub const HELP: &[&str] = &[
     "/why        which words drove my last decision",
     "/fix <tag>  my last answer was wrong, it meant <tag>",
     "/teach a => b   brand-new intent: when you say a, I reply b",
+    "/know a => b    teach me a fact I can look up later (instant, no retraining)",
     "/intents    all intents with phrase counts",
     "/bench      measure my inference speed",
     "/anim       toggle animations (TUI)",
@@ -135,6 +136,7 @@ pub fn run(app: &mut App, line: &str) -> Out {
         }
         "forget" => {
             s.mem.clear();
+            s.persona = crate::persona::Persona::load(&mut s.mem);
             out(vec!["memory wiped (facts, list, XP and dex)".into()])
         }
         "clear" => out(vec![]),
@@ -218,7 +220,8 @@ pub fn run(app: &mut App, line: &str) -> Out {
             if intents::clean_line(p).is_empty() || intents::clean_line(r).is_empty() {
                 return out(vec!["usage: /teach how is the weather on mars => Cold and dusty.".into()]);
             }
-            let n = (1..).find(|n| brain.tag_idx(&format!("taught_{n}")).is_none()).unwrap_or(1);
+            let existing = intents::load();
+            let n = (1..).find(|n| !existing.iter().any(|i| i.tag == format!("taught_{n}"))).unwrap_or(1);
             let tag = format!("taught_{n}");
             let _ = intents::append_learned(&tag, p, Some(r));
             let mut toasts = Vec::new();
@@ -286,6 +289,13 @@ pub fn run(app: &mut App, line: &str) -> Out {
                 None => out(vec!["couldn't read that, try /tz +5:30 or /tz -8".into()]),
             }
         }
+        "know" => match arg.split_once("=>") {
+            Some((topic, text)) if crate::kb::append_user(topic, text) => {
+                brain.reload_kb();
+                out(vec![format!("ok, saved. I can look up {} topics now (no retraining needed)", brain.kb.len())])
+            }
+            _ => out(vec!["usage: /know octopus => Octopuses have three hearts.".into()]),
+        },
         _ => out(vec!["unknown command, try /help".into()]),
     }
 }
