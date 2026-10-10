@@ -357,6 +357,27 @@ pub fn quick_student(intents: &[Intent], temp: f32, scfg: Cfg, clarify: f32) -> 
     s
 }
 
+/// Was the model on disk built from exactly these intents? Launch uses this to decide whether to retrain.
+///
+/// Two kinds of model are current: one a fresh `train` run would produce, and one `quick_student` wrote after
+/// /teach, /fix or a clarification. The second keeps the size the model already had (a fresh run would size it
+/// for the new class count) and always trains on augmented data, so it is checked against its own config.
+/// Comparing only against a fresh run's config made every /teach look out of date and forced a full retrain.
+pub fn model_is_current(m: &Ensemble, intents: &[Intent], o: &Opts) -> bool {
+    let (tags, ex) = intents::flatten(intents);
+    if m.tags != tags {
+        return false;
+    }
+    let augmented = augment(&ex, &tags, SEED);
+    let fresh = student_cfg(o.arch, o.tier, intents.len());
+    let used = if o.aug { &augmented } else { &ex };
+    if m.data_hash == model::data_hash(&tags, used, model::cfg_salt(&fresh)) {
+        return true;
+    }
+    let own = m.cfg();
+    own.arch == o.arch && m.data_hash == model::data_hash(&tags, &augmented, model::cfg_salt(&own))
+}
+
 /// Raw inference speed of the shipped model.
 pub fn bench(m: &Ensemble) -> (f32, f32) {
     let probes = ["hello there", "whats the weather like", "tell me a joke please", "i feel really down today", "thanks a lot", "who made you"];

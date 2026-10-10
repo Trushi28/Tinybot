@@ -433,22 +433,25 @@ fn augmentation_is_label_aware() {
 }
 
 #[test]
-fn shipped_model_never_mistakes_ordinary_requests_for_a_crisis() {
-    // regression: a 251k GRU answered "10 km to miles" with the crisis message
-    let Some(m) = Ensemble::load("bot.bin") else { return }; // only when the shipped model is present
-    let brain = Brain::new(m, intents::load());
+fn trained_models_never_mistake_ordinary_requests_for_a_crisis() {
+    // Regression: a 251k GRU answered "10 km to miles" with the crisis message. The shipped bot.bin is not in the
+    // repository (and the old version of this test silently passed without it), so train a small GRU right here.
+    let intents = intents::load();
+    let gru = crate::train::quick_student(&intents, 1.0, crate::train::student_cfg(Arch::Gru, crate::model::tier("nano").unwrap(), intents.len()), 0.75);
+    let gru_brain = Brain::new(gru, intents);
     let benign = [
         "10 km to miles", "what is 5+3", "roll 2d6", "set a timer for 5 minutes", "days until 2026-12-25", "add milk to my list", "100 f to c",
         "and in meters", "what about 5 miles", "double that", "draw a unicorn", "tell me about cargo", "i am interested about you", "12*(3+4)",
         "what time is it", "my favorite color is teal", "note: buy stamps", "how many days until my birthday", "tell me a space fact", "hello",
     ];
-    let mut s = Session::new(Memory::ephemeral(), false);
-    for t in benign {
-        let r = brain.reply(&mut s, t);
-        assert_ne!(r.tag, "crisis", "{t:?} must not trigger the crisis reply");
+    for (name, brain) in [("gru", &gru_brain), ("bow", real_brain())] {
+        let mut s = Session::new(Memory::ephemeral(), false);
+        for t in benign {
+            let r = brain.reply(&mut s, t);
+            assert_ne!(r.tag, "crisis", "{name}: {t:?} must not trigger the crisis reply");
+        }
     }
 }
-
 
 #[test]
 fn again_works_repeatedly() {
@@ -504,4 +507,171 @@ fn knowledge_base_answers_open_questions_and_continues() {
     assert!(r.contains("light"), "{r}");
     let r = say(b, &mut s, "what is the capital of mars");
     assert!(!r.contains("Paris") && !r.contains("Canberra"), "{r}");
+}
+
+#[test]
+fn calculator_ignores_signs_phone_numbers_and_ranges() {
+    assert!(calc("-5").is_none());
+    assert!(calc("555-1234").is_none());
+    assert!(calc("1990-2000").is_none());
+    // real subtraction still works
+    assert_eq!(val("5 - 3"), 2.0);
+    assert_eq!(val("what is 10-3"), 7.0);
+    assert_eq!(val("5 minus 3"), 2.0);
+    assert_eq!(val("-5 + 8"), 3.0);
+}
+
+#[test]
+fn bare_unit_word_does_not_rerun_old_conversion() {
+    use crate::calc::{convert, convert_followup};
+    let (c, _) = convert("10 km to miles").unwrap().unwrap();
+    for t in ["hours", "s", "m", "hello there"] {
+        assert!(convert_followup(t, &c).is_none(), "{t}");
+    }
+    assert!(convert_followup("and in m", &c).is_some());
+    assert!(convert_followup("5 m", &c).is_some());
+}
+
+#[test]
+fn games_survive_off_topic_input() {
+    let b = real_brain();
+    let mut s = Session::new(Memory::ephemeral(), false);
+    say(b, &mut s, "lets play rock paper scissors");
+    say(b, &mut s, "what is the capital of france");
+    let r = say(b, &mut s, "rock");
+    assert!(r.contains("I picked"), "rps ended on off-topic input: {r}");
+    let r = say(b, &mut s, "stop");
+    assert!(r.contains("Final score"), "{r}");
+
+    let mut s = Session::new(Memory::ephemeral(), false);
+    say(b, &mut s, "guess the number");
+    say(b, &mut s, "tell me a fun fact about space");
+    say(b, &mut s, "what is 2+2");
+    let r = say(b, &mut s, "50");
+    assert!(r == "Higher." || r == "Lower." || r.contains("Correct"), "guess ended early: {r}");
+}
+
+#[test]
+fn stories_are_not_date_questions() {
+    assert!(try_date("I slept 5 days ago").is_none());
+    assert!(try_date("we met 2 weeks ago").is_none());
+    assert!(try_date("my flight is in 3 days").is_none());
+    // real questions still answer
+    assert!(try_date("5 days ago").is_some());
+    assert!(try_date("what date is 10 days from now").is_some());
+    assert!(try_date("what was the date 3 weeks ago").is_some());
+    assert!(try_date("in 10 days").is_some());
+}
+
+#[test]
+fn memory_skips_unfinished_likes_and_cuts_lists_cleanly() {
+    let mut m = Memory::ephemeral();
+    assert!(try_facts("i like to play", &mut m).is_none());
+    assert!(try_facts("i like the", &mut m).is_none());
+    assert!(m.facts.get("likes").is_none());
+    assert!(try_facts("i like to swim", &mut m).is_some()); // a finished thought is kept
+    // a long likes list drops whole old items, never half a word, and never repeats an item
+    let mut m = Memory::ephemeral();
+    for item in [
+        "chess", "pizza", "hiking in the mountains", "reading science fiction novels", "playing the electric guitar", "watching old documentaries", "baking sourdough bread", "photography",
+    ] {
+        assert!(try_facts(&format!("i like {item}"), &mut m).is_some());
+    }
+    assert!(try_facts("i like Photography", &mut m).is_some());
+    let likes = m.facts.get("likes").unwrap().clone();
+    assert!(likes.chars().count() <= 120, "{likes}");
+    assert!(likes.ends_with("photography"), "{likes}");
+    assert_eq!(likes.matches("photography").count(), 1, "{likes}");
+    for it in likes.split(", ") {
+        assert!(["chess", "pizza", "hiking in the mountains", "reading science fiction novels", "playing the electric guitar", "watching old documentaries", "baking sourdough bread", "photography"].contains(&it), "cut item: {it} in {likes}");
+    }
+}
+
+#[test]
+fn corrupt_model_headers_are_rejected_before_allocating() {
+    let intents = intents::load();
+    let (tags, ex) = intents::flatten(&intents);
+    let t = Ensemble::train(&ex, tags, &[TINY, TINY], 1, 1.0, 0);
+    let m = Ensemble::distill(&t, &ex, TINY, 1, 1.3, 0);
+    let path = std::env::temp_dir().join("tinybot_corrupt_header.bin");
+    let p = path.to_str().unwrap();
+    m.save(p).unwrap();
+    let good = std::fs::read(&path).unwrap();
+    assert!(Ensemble::load(p).is_some());
+
+    // find the first net header: arch byte, then dim=8 hid=16 bits=10 ch=0 as little-endian u32s
+    let mut pat = vec![Arch::Bow as u8];
+    for v in [8u32, 16, 10, 0] {
+        pat.extend_from_slice(&v.to_le_bytes());
+    }
+    let at = good.windows(pat.len()).position(|w| w == &pat[..]).expect("net header not found");
+    let patch = |dim: u32, bits: u32| {
+        let mut b = good.clone();
+        b[at + 1..at + 5].copy_from_slice(&dim.to_le_bytes());
+        b[at + 9..at + 13].copy_from_slice(&bits.to_le_bytes());
+        b
+    };
+    // 2^16 rows x 512 dims = 134 MB of floats claimed by a ~100 KB file; 2^15 x 256 and 2^14 x 128 are within the
+    // per-net cap but the file does not contain the rows they claim
+    for (dim, bits) in [(512, 16), (256, 15), (128, 14), (2, 16)] {
+        std::fs::write(&path, patch(dim, bits)).unwrap();
+        assert!(Ensemble::load(p).is_none(), "accepted dim={dim} bits={bits}");
+    }
+
+    // a file over the size cap is refused without being read
+    let f = std::fs::File::create(&path).unwrap();
+    f.set_len((256 << 20) + 1).unwrap();
+    drop(f);
+    assert!(Ensemble::load(p).is_none());
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn model_saved_after_teach_is_current_at_next_launch() {
+    use crate::train::{model_is_current, quick_student, student_cfg, Opts};
+    let mut o = Opts::default_opts();
+    o.arch = Arch::Bow;
+    o.tier = crate::model::tier("nano").unwrap();
+    let mut intents = intents::load();
+    let old_cfg = student_cfg(o.arch, o.tier, intents.len());
+    // what /teach does: brand-new intents, after which quick_student keeps the model's old size. Add enough that a
+    // fresh run would size the model differently, which is exactly when the launch check used to call it out of date.
+    let mut n = 0;
+    while student_cfg(o.arch, o.tier, intents.len()) == old_cfg {
+        n += 1;
+        assert!(n < 400, "student_cfg never changed with the class count; this test no longer exercises the bug");
+        intents.push(intents::Intent { tag: format!("taught_test_{n}"), examples: vec![format!("how is the weather on planet {n}")], responses: vec!["Cold and dusty.".into()], ctx: vec![] });
+    }
+    let m = quick_student(&intents, 1.0, old_cfg, 0.75);
+    let path = std::env::temp_dir().join("tinybot_teach_current.bin");
+    let p = path.to_str().unwrap();
+    m.save(p).unwrap();
+    let loaded = Ensemble::load(p).unwrap();
+    assert!(model_is_current(&loaded, &intents, &o), "a model written after /teach was treated as out of date");
+    // genuinely stale models are still caught: another intent was added after the save
+    let mut more = intents.clone();
+    more.push(intents::Intent { tag: "taught_test_2".into(), examples: vec!["what is the moon made of".into()], responses: vec!["Rock.".into()], ctx: vec![] });
+    assert!(!model_is_current(&loaded, &more, &o));
+    // and so is a model of a different architecture
+    let mut gru = o.clone();
+    gru.arch = Arch::Gru;
+    assert!(!model_is_current(&loaded, &intents, &gru));
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn art_only_reads_the_words_after_draw_or_sketch() {
+    let mut r = Rng::new(1);
+    // earlier chatter ("love", "bot", "home") must not pick the picture
+    let a = crate::art::draw("i love this, draw a dragon", &mut r);
+    assert!(a.contains("don't know how to draw a dragon"), "{a}");
+    let a = crate::art::draw("my bot can draw a unicorn", &mut r);
+    assert!(a.contains("don't know how to draw a unicorn"), "{a}");
+    let a = crate::art::draw("at home i like to sketch a dog", &mut r);
+    assert!(a.starts_with("Here's a dog:"), "{a}");
+    // plain requests and "of" phrasing still work
+    assert!(crate::art::draw("draw a cat", &mut r).starts_with("Here's a cat:"));
+    assert!(crate::art::draw("can you sketch me a rocket please", &mut r).starts_with("Here's a rocket:"));
+    assert!(crate::art::draw("draw a picture of an owl", &mut r).starts_with("Here's a owl:"));
+    assert!(crate::art::draw("ascii art of a fish", &mut r).starts_with("Here's a fish:"));
 }

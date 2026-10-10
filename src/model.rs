@@ -126,6 +126,12 @@ const EMB_BOOST: f32 = 4.0;
 const SMOOTH: f32 = 0.04;
 const MAGIC: &[u8] = b"TINYBOT5";
 
+// Loader limits. Real models are far below these (largest tier: 2^15 rows); they only exist so a corrupt
+// header cannot make `load` allocate gigabytes.
+const MAX_MODEL_BYTES: u64 = 256 << 20;
+const MAX_NET_EMB_FLOATS: usize = 1 << 24;
+const MAX_TOTAL_EMB_FLOATS: usize = 1 << 25;
+
 // decision thresholds (calibrated probability)
 pub const P_ANSWER: f32 = 0.55;
 static ANSWER_BITS: AtomicU32 = AtomicU32::new(0);
@@ -706,8 +712,13 @@ impl Ensemble {
     }
 
     pub fn load(path: &str) -> Option<Ensemble> {
+        // a corrupt or hostile file must be rejected by its size before anything big is allocated
+        if fs::metadata(path).ok()?.len() > MAX_MODEL_BYTES {
+            return None;
+        }
         let data = fs::read(path).ok()?;
         let mut r = Reader { d: &data, p: 0 };
+        let mut emb_floats = 0usize;
         if r.take(MAGIC.len())? != MAGIC {
             return None;
         }
@@ -731,10 +742,21 @@ impl Ensemble {
             if !(2..=512).contains(&dim) || !(2..=1024).contains(&hid) || !(6..=16).contains(&bits) || ch > 1024 || (arch != Arch::Bow && ch == 0) {
                 return None;
             }
+            let rows = 1usize << bits;
+            // The header alone must not decide how much memory we allocate. Bound the embedding table,
+            // then read the touched-row bitmap (which take() checks against the file) and require the file
+            // to really hold those rows before building the net.
+            emb_floats = emb_floats.checked_add(rows.checked_mul(dim)?)?;
+            if rows * dim > MAX_NET_EMB_FLOATS || emb_floats > MAX_TOTAL_EMB_FLOATS {
+                return None;
+            }
+            let touched = unpack_bits(&mut r, rows)?;
+            let live_rows = touched.iter().filter(|&&t| t).count();
+            if r.left() < live_rows.checked_mul(dim + 4)? {
+                return None;
+            }
             let cfg = Cfg { arch, dim, hid, bits: bits as u32, ch, epochs: student_epochs(arch) };
             let mut net = Net::new(c, cfg, &mut Rng::new(0));
-            let rows = 1usize << bits;
-            let touched = unpack_bits(&mut r, rows)?;
             {
                 let (w, t) = net.emb_mut();
                 w.fill(0.0);
@@ -779,6 +801,9 @@ impl<'a> Reader<'a> {
         let s = self.d.get(self.p..e)?;
         self.p = e;
         Some(s)
+    }
+    fn left(&self) -> usize {
+        self.d.len().saturating_sub(self.p)
     }
     fn u32(&mut self) -> Option<usize> {
         Some(u32::from_le_bytes(self.take(4)?.try_into().ok()?) as usize)

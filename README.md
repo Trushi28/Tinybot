@@ -36,9 +36,11 @@ cargo run --release            # animated terminal UI
 cargo run --release -- chat --plain   # bare REPL (also used automatically when piped)
 ```
 
-Prebuilt models are included (`bot.bin` plus 15 more in `models/`), so the first run is instant. If you edit
-`intents.txt`, the model it needs is out of date and it retrains by itself (about 2 minutes on one core for the default
-GRU, much less on several).
+No trained models are checked in (`bot.bin` and `models/` are in `.gitignore`), so the **first run trains the one it
+needs**: about 2 minutes on one core for the default GRU, much less on several. After that it loads instantly. If you
+edit `intents.txt` the saved model is out of date and it retrains by itself. Teaching it with `/teach`, `/fix` or a
+"yes" to a clarification updates the saved model in the background, and that model is accepted at the next launch
+without another full retrain.
 
 Pick another brain with `--size` and `--arch`, for example `cargo run --release -- --size large --arch bow`.
 See [Model sizes](#model-sizes-and-architectures).
@@ -63,6 +65,7 @@ Windows Terminal should work but is untested (use `--plain` if anything misrende
 | **List** | `add milk to my list`, `show my list`, `remove 1` |
 | **Fact book** | 53 facts in 7 categories: `tell me a space fact`, `animal fact`, `fact of the day`. Unheard ones come first |
 | **ASCII art** | 16 pieces (cat, dog, mouse, bunny, person, fish, owl, house, flower, star, sun, tree, heart, rocket, crab, robot). Ask for something it can't draw and it tells you, instead of drawing something random |
+| **Knowledge** | about 170 short topics in `kb.txt` (countries, India, space, science, computing, history, sport): `what is the capital of turkey`, `how fast is a cheetah`, then `tell me more`. Teach it more instantly with `/know topic => text` (saved in `kb_user.txt`, no retraining). Questions it only half understands ("capital of mars") are declined |
 | **Games** | riddles, rock-paper-scissors (the bot learns your habits), number guessing |
 
 ## It has feelings, sort of
@@ -77,13 +80,13 @@ Windows Terminal should work but is untested (use `--plain` if anything misrende
 - **Energy** drains as you chat and recovers while idle. Tired bots yawn. Leave it alone and it dozes off.
 - **XP, levels, titles** (Bit → Nibble → Byte → Neuron → … → Overfit Overlord), **achievements**, day **streaks**,
   and an **intent dex** (`/dex`): `???` until you discover each thing it can do.
-- **Safety net.** A deterministic check of about 45 phrases and paraphrases ("want to die", "nobody would miss
+- **Safety net.** A deterministic check of about 50 phrases and paraphrases ("want to die", "nobody would miss
   me", "tired of living", …) runs before the neural net, games, sulking and every skill. A message about suicide
   or self-harm always gets a plain, serious answer pointing to real help, with no XP, badges or mood effects.
   The tests prove it works even with an almost untrained model, because a small classifier should never be the
   only thing standing between someone and that answer. The network adds a second opinion for wordings the list
   misses, but it ignores inputs with digits: a 251k GRU once answered "10 km to miles" with the crisis message,
-  so there is now a regression test over the shipped model. It's a keyword list, so it will still miss unusual
+  so there is now a regression test that trains its own small GRU and checks ordinary requests against it. It's a keyword list, so it will still miss unusual
   phrasings; treat it as a safety net, not a guarantee.
 - **Night Owl** badge: chatting between midnight and 5am *your* local time (needs a known time zone).
 
@@ -119,11 +122,11 @@ Three architectures, all hand-written, six sizes each (`cargo run --release -- m
 | `small` | 100k | `bow-small` | `cnn-small` | `gru-small` |
 | `base` | 250k | `bow-base` | `cnn-base` | **`gru-base` (default)** |
 | `large` | 500k | `bow-large` | `cnn-large` | `gru-large` |
-| `xl` | 1M | `bow-xl` | `cnn-xl` (not prebuilt) | `gru-xl` |
-| `max` | 4M | `bow-max` | `cnn-max` (not prebuilt) | `gru-max` |
+| `xl` | 1M | `bow-xl` | `cnn-xl` | `gru-xl` |
+| `max` | 4M | `bow-max` | `cnn-max` | `gru-max` |
 
-Prebuilt: every size for the bag-of-features net and the GRU, and nano to large for the CNN. The two missing
-ones build on first use. Each size is fitted so every architecture lands within 3% of the same parameter budget, so the comparison is fair.
+Nothing is prebuilt: each model is built the first time you ask for it, or all at once with `train --all`.
+Each size is fitted so every architecture lands within 3% of the same parameter budget, so the comparison is fair.
 "Parameters" means allocated parameters (what the model costs in memory); the file on disk is smaller because
 only trained embedding rows are stored, as int8.
 
@@ -258,11 +261,12 @@ Riddles are `question | answer/alt answer`. Add the phrases first, run `eval`, t
 
 | File | What |
 |---|---|
-| `bot.bin` | the default student (GRU 250k, int8) |
+| `bot.bin` | the default student (GRU 250k, int8), trained on first run |
 | `models/<arch>-<size>.bin` | every other size and architecture you build |
 | `memory.txt` | your facts, list, notes, XP, dex, bond, fact book |
 | `flow.txt` | learned intent-to-intent transitions |
 | `learned.txt` | phrases and intents from `/fix`, `/teach` and "yes" to a clarification |
+| `kb_user.txt` | topics you added with `/know` |
 
 Delete any of them to reset that part. `/forget` wipes `memory.txt`. Writes to `learned.txt` and `memory.txt` are
 sanitised so input can't break the line-based formats. Nothing touches the network.
@@ -280,10 +284,10 @@ sanitised so input can't break the line-based formats. Nothing touches the netwo
 | `facts.rs` `art.rs` | the fact book · ASCII gallery |
 | `tui.rs` | the terminal UI: face canvas, particles, brain panel, console |
 | `cmds.rs` `train.rs` | slash commands · training pipeline, eval, benchmarks |
-| `tests.rs` + `seqnet.rs` | 30 tests, including finite-difference gradient checks for the CNN and GRU: calculator edge cases and hostile nesting, conversions, dates, memory, notes, timers, facts, sulking, a fuzz run |
+| `tests.rs` + `seqnet.rs` | 55 tests, including finite-difference gradient checks for the CNN and GRU: calculator edge cases and hostile nesting, conversions, dates, memory, notes, timers, facts, games, corrupt model files, the terminal UI's column widths, sulking, a fuzz run |
 
 ```bash
-cargo test --release     # includes a 6,000-input fuzz run; the first run trains a model
+cargo test --release     # includes a 6,000-input fuzz run; trains several small models, about a minute
 cargo run --release -- eval      # teacher vs student cross-validation
 cargo run --release -- ctx       # does the context prior help?
 cargo run --release -- bench     # inference speed

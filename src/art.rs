@@ -133,14 +133,27 @@ pub fn names() -> String {
     GALLERY.iter().map(|g| g.0).collect::<Vec<_>>().join(", ")
 }
 
+/// The words that say what to draw: everything after "draw"/"sketch". Words before it ("I love this, draw a
+/// dragon", "my bot can draw...") are chatter and must never pick a picture. With no draw/sketch word at all
+/// ("ascii art of a cat") the request is anchored on "art"/"of"/"picture" instead.
+fn request<'a, 'b>(words: &'b [&'a str]) -> &'b [&'a str] {
+    let anchor = words
+        .iter()
+        .position(|w| matches!(*w, "draw" | "sketch" | "drawing" | "sketching"))
+        .or_else(|| words.iter().position(|w| matches!(*w, "art" | "of" | "picture" | "pic")));
+    match anchor {
+        Some(at) => &words[at + 1..],
+        None => &[],
+    }
+}
+
 /// The thing being asked for: the first meaningful word after "draw"/"sketch".
 fn subject(words: &[&str]) -> Option<String> {
     const SKIP: [&str; 20] = [
         "me", "a", "an", "the", "some", "my", "for", "something", "anything", "picture", "pic", "ascii", "art", "please", "can", "you", "drawing", "of",
         "surprise", "random",
     ];
-    let at = words.iter().position(|w| matches!(*w, "draw" | "sketch" | "drawing"))?;
-    words[at + 1..].iter().find(|w| !SKIP.contains(w)).map(|w| w.to_string())
+    request(words).iter().find(|w| !SKIP.contains(w)).map(|w| w.to_string())
 }
 
 pub fn draw(text: &str, rng: &mut Rng) -> String {
@@ -149,7 +162,8 @@ pub fn draw(text: &str, rng: &mut Rng) -> String {
     if low.contains("what can you draw") || low.contains("what do you draw") || low.contains("what can you sketch") || ws.contains(&"gallery") {
         return format!("I can draw: {}. Try \"draw a dog\".", names());
     }
-    if let Some(g) = GALLERY.iter().find(|(_, kws, _)| kws.iter().any(|k| ws.contains(k))) {
+    let wanted = request(&ws);
+    if let Some(g) = GALLERY.iter().find(|(_, kws, _)| kws.iter().any(|k| wanted.contains(k))) {
         return format!("Here's a {}:\n{}", g.0, g.2.trim_matches('\n'));
     }
     if let Some(sub) = subject(&ws) {

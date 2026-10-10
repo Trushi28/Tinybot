@@ -39,13 +39,9 @@ const FLOW_PATH: &str = "flow.txt";
 
 fn load_or_train(o: &train::Opts) -> Brain {
     let intents = intents::load();
-    let (tags, ex) = intents::flatten(&intents);
-    let scfg = train::student_cfg(o.arch, o.tier, intents.len());
-    let used = if o.aug { train::augment(&ex, &tags, train::SEED) } else { ex.clone() };
-    let want = model::data_hash(&tags, &used, model::cfg_salt(&scfg));
     let path = o.path();
     let m = match Ensemble::load(&path) {
-        Some(m) if m.data_hash == want && m.tags == tags => m,
+        Some(m) if train::model_is_current(&m, &intents, o) => m,
         _ => {
             eprintln!("({path} missing or out of date with the intents, training first)");
             train::train_quiet(o)

@@ -571,6 +571,8 @@ impl Brain {
             },
             Pending::Riddle { answers, shown, tries } => {
                 if n_words > 8 {
+                    // off-topic: answer it normally, but keep the riddle alive
+                    s.pending = Pending::Riddle { answers, shown, tries };
                     return None;
                 }
                 let padded = format!(" {low} ");
@@ -594,7 +596,11 @@ impl Brain {
                     return Some(r);
                 }
                 let mv = ["rock", "paper", "scissors"].iter().position(|m| low.split(' ').any(|w| w == *m || (w.len() > 3 && m.starts_with(w))));
-                let you = mv?;
+                let Some(you) = mv else {
+                    // not a move: answer it normally, but keep the match going
+                    s.pending = Pending::Rps;
+                    return None;
+                };
                 // adaptive opponent: predict your next move from your move-to-move habits, then counter it
                 let predicted = match s.rps_prev {
                     Some(p) if s.rng.f32() < 0.6 && s.rps_trans[p].iter().sum::<u32>() > 1 => {
@@ -632,8 +638,17 @@ impl Brain {
                 if low.contains("give up") {
                     return Some(Reply::skill(format!("It was {target}."), "guess_reveal"));
                 }
-                let g = crate::calc::lex(text).and_then(|t| t.into_iter().find_map(|x| if let crate::calc::Tok::Num(n) = x { Some(n) } else { None }));
-                let g = g?;
+                // a guess is a short message with exactly one number and no operators ("50", "is it 50?");
+                // "what is 2+2" or "add 3 to my list" are other requests and must not eat a guess
+                let guess = crate::calc::lex(text).and_then(|t| {
+                    let nums: Vec<f64> = t.iter().filter_map(|x| if let crate::calc::Tok::Num(n) = x { Some(*n) } else { None }).collect();
+                    let ops = t.iter().any(|x| matches!(x, crate::calc::Tok::Sym(c) if "+*/^%!".contains(*c)));
+                    (nums.len() == 1 && !ops && n_words <= 5).then(|| nums[0])
+                });
+                let Some(g) = guess else {
+                    s.pending = Pending::Guess { target, tries };
+                    return None;
+                };
                 let tries = tries + 1;
                 if g == target as f64 {
                     let note = if tries <= 7 { "That's within the 7 guesses binary search needs." } else { "Binary search would have taken 7 at most." };
@@ -773,7 +788,7 @@ impl Brain {
         if let Some(r) = self.pending_turn(s, text) {
             return r;
         }
-        s.pending = Pending::None;
+        // note: pending_turn keeps a game alive on off-topic input and drops a stale confirmation itself
 
         // deterministic skills first: high-precision, no training data needed
         if let Some(r) = self.on_answer(s, text) {

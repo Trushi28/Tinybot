@@ -373,3 +373,288 @@ About 8 billion people live on Earth, a number passed in November 2022.
 [Meaning of life | purpose philosophy]
 There is no agreed answer. Philosophers suggest purpose comes from relationships, from what you create, or from faith.
 In The Hitchhiker's Guide to the Galaxy the answer is 42, which nobody can interpret.
+
+# ---------------- more countries
+[Argentina | buenos aires argentine]
+Argentina is a country in South America, and its capital is Buenos Aires.
+About 46 million people live in Argentina. The language is Spanish and the currency is the peso.
+Aconcagua, at about 6,961 metres, is the highest mountain in the Americas.
+
+[South Korea | seoul korean korea]
+South Korea is a country in East Asia, and its capital is Seoul.
+About 52 million people live in South Korea. The language is Korean and the currency is the won.
+
+[Pakistan | islamabad pakistani karachi]
+Pakistan is a country in South Asia, and its capital is Islamabad.
+About 240 million people live in Pakistan. Urdu is the national language, English is also official, and the currency is the Pakistani rupee.
+K2, the second highest mountain on Earth at 8,611 metres, is on the border of Pakistan and China.
+
+[Bangladesh | dhaka bangladeshi bengali]
+Bangladesh is a country in South Asia, and its capital is Dhaka.
+About 170 million people live in Bangladesh. The language is Bengali and the currency is the taka.
+
+[Nepal | kathmandu nepali nepalese]
+Nepal is a country in the Himalayas, and its capital is Kathmandu.
+About 30 million people live in Nepal. The language is Nepali and the currency is the Nepalese rupee.
+Mount Everest sits on the border between Nepal and China.
+
+[Turkey | turkiye ankara istanbul turkish]
+Turkey (Türkiye) is a country in Western Asia and southeastern Europe, and its capital is Ankara, not Istanbul.
+About 85 million people live in Turkey. The language is Turkish and the currency is the lira.
+Istanbul, the largest city, is built on both sides of the Bosphorus strait, so it lies in both Europe and Asia.
+
+[Saudi Arabia | riyadh saudi arabian mecca medina]
+Saudi Arabia is a country in the Middle East, and its capital is Riyadh.
+About 35 million people live in Saudi Arabia. The language is Arabic and the currency is the riyal.
+Mecca and Medina, the two holiest cities in Islam, are in Saudi Arabia.
+
+[Kenya | nairobi kenyan swahili]
+Kenya is a country in East Africa, and its capital is Nairobi.
+About 55 million people live in Kenya. Swahili and English are the official languages, and the currency is the Kenyan shilling.
+
+[Netherlands | holland dutch amsterdam the hague]
+The Netherlands is a country in Western Europe, and its capital is Amsterdam, although the government sits in The Hague.
+About 18 million people live in the Netherlands. The language is Dutch and the currency is the euro.
+
+[Sweden | stockholm swedish]
+Sweden is a country in Northern Europe, and its capital is Stockholm.
+About 10.5 million people live in Sweden. The language is Swedish and the currency is the krona.
+
+[Switzerland | bern swiss zurich geneva]
+Switzerland is a country in central Europe, and its capital is Bern.
+About 9 million people live in Switzerland. It has four national languages: German, French, Italian and Romansh. The currency is the Swiss franc.
+
+[Greece | athens greek]
+Greece is a country in southern Europe, and its capital is Athens.
+About 10 million people live in Greece. The language is Greek and the currency is the euro.
+Ancient Greece is where democracy and the Olympic Games began.
+
+[New Zealand | wellington aotearoa kiwi]
+New Zealand is an island country in the southwestern Pacific, and its capital is Wellington.
+About 5 million people live in New Zealand. English and Māori are official languages, and the currency is the New Zealand dollar.
+
+[Thailand | bangkok thai]
+Thailand is a country in Southeast Asia, and its capital is Bangkok.
+About 71 million people live in Thailand. The language is Thai and the currency is the baht.
+
+[Vietnam | hanoi vietnamese]
+Vietnam is a country in Southeast Asia, and its capital is Hanoi.
+About 100 million people live in Vietnam. The language is Vietnamese and the currency is the dong.
+
+# ---------------- India
+[Hyderabad | telangana charminar biryani hitec]
+Hyderabad is a large city in southern India and the capital of the state of Telangana.
+About 10 million people live in the Hyderabad urban area. Muhammad Quli Qutb Shah founded the city in 1591, and the Charminar was built in the same year.
+Hyderabad is famous for biryani, for its pearls, and for the tech companies in HITEC City.
+
+[Indian states | states union territories]
+India has 28 states and 8 union territories.
+The states are governed by elected state governments, and each state has its own capital.
+
+[Republic Day | indian constitution 26 january constitution of india]
+India's Constitution came into effect on 26 January 1950, and the day is celebrated every year as Republic Day.
+B. R. Ambedkar chaired the committee that drafted the Constitution.
+
+[ISRO | isro indian research organisation]
+ISRO is the Indian Space Research Organisation, founded in 1969 and headquartered in Bengaluru.
+Its Mars Orbiter Mission, Mangalyaan, reached Mars orbit on 24 September 2014, which made India the first country to do it on its first attempt.
+
+[Chandrayaan-3 | chandrayaan vikram pragyan]
+Chandrayaan-3 is the Indian Moon mission whose lander, Vikram, landed near the Moon's south pole on 23 August 2023.
+India became the first country to reach that region of the Moon, and the fourth to touch down on the Moon at all.
+
+[Taj Mahal | agra shah jahan mumtaz mahal]
+The Taj Mahal is a white marble mausoleum in Agra, India.
+The Mughal emperor Shah Jahan built it between 1632 and 1653 in memory of his wife Mumtaz Mahal.
+
+[Mughal Empire | mughals babur akbar aurangzeb]
+The Mughal Empire ruled much of the Indian subcontinent from 1526, when Babur won the Battle of Panipat, until the British ended it in 1857.
+Its best known emperors were Akbar, Shah Jahan and Aurangzeb.
+
+# ---------------- space
+[ISS | iss international station astronauts]
+The International Space Station is a large laboratory that orbits Earth about 400 kilometres up.
+It circles the planet roughly every 90 minutes, and people have lived aboard it continuously since November 2000.
+
+[Hubble telescope | hubble]
+The Hubble Space Telescope was launched in 1990 and orbits Earth, looking at the sky without the blur of the atmosphere.
+It is named after the astronomer Edwin Hubble.
+
+[Webb telescope | jwst james webb infrared]
+The James Webb Space Telescope launched on 25 December 2021 and observes mostly in infrared light.
+It sits about 1.5 million kilometres from Earth, where it orbits the Sun in step with us.
+
+[Yuri Gagarin | gagarin cosmonaut vostok]
+Yuri Gagarin, a Soviet cosmonaut, became the first human in space on 12 April 1961 aboard Vostok 1.
+His flight orbited Earth once and lasted about 108 minutes.
+
+# ---------------- science and nature
+[Speed of sound | mach supersonic]
+Sound travels through air at about 343 metres per second (roughly 1,235 km/h) at 20 degrees Celsius.
+It is much faster in water and in solids, and it cannot travel through a vacuum.
+
+[Absolute zero | kelvin]
+Absolute zero is the lowest possible temperature: 0 kelvin, which is -273.15 degrees Celsius.
+At that point particles have the least motion that physics allows.
+
+[Oxygen | nitrogen]
+Oxygen makes up about 21 percent of the air we breathe. Nitrogen makes up about 78 percent.
+Animals use oxygen to release energy from food, and plants release it during photosynthesis.
+
+[Carbon dioxide | co2 greenhouse gas]
+Carbon dioxide, CO2, is a gas that makes up about 0.04 percent of the air.
+Plants take it in for photosynthesis, animals breathe it out, and burning fossil fuels adds more of it, which traps heat.
+
+[Dinosaurs | dinosaur extinction asteroid fossils t rex]
+Dinosaurs appeared roughly 230 million years ago and ruled the land for well over 150 million years.
+Most of them died out about 66 million years ago, after an asteroid hit Earth. Birds are their living descendants.
+
+[Blue whale | whale krill]
+The blue whale is the largest animal known to have ever lived, reaching about 30 metres in length.
+Its heart is the size of a small car, and it eats tiny shrimp-like animals called krill.
+
+[Cheetah | cheetahs]
+The cheetah is the fastest land animal, reaching about 100 km/h in short sprints.
+It can only keep that speed for a few hundred metres.
+
+[Mariana Trench | challenger]
+The Mariana Trench in the western Pacific Ocean is the deepest known part of the ocean.
+Its deepest point, Challenger Deep, is almost 11 kilometres below the surface.
+
+[Tectonic plates | earthquake earthquakes volcano plate]
+Earth's outer shell is broken into large moving pieces called tectonic plates, which drift a few centimetres a year.
+Most earthquakes and volcanoes happen where plates meet.
+
+[Eclipse | solar eclipse lunar eclipse]
+A solar eclipse happens when the Moon passes between the Sun and Earth and blocks the Sun's light.
+A lunar eclipse happens when Earth passes between the Sun and the Moon, so Earth's shadow falls on the Moon.
+
+[Rainbow | rainbows spectrum]
+A rainbow forms when sunlight is bent and reflected inside raindrops, which splits it into its colours.
+The colours run from red on the outside to violet on the inside.
+
+[Blood | plasma]
+Blood carries oxygen and nutrients around the body. Red blood cells carry the oxygen.
+An adult has about 5 litres of blood.
+
+[Brain | neurons neuron]
+The human brain has about 86 billion neurons, which talk to each other with electrical and chemical signals.
+It uses about a fifth of the body's energy while weighing only around 1.4 kilograms.
+
+[Heart | heartbeat pulse]
+The human heart is a muscle that pumps blood around the body, and it beats about 100,000 times a day.
+It has four chambers: two atria and two ventricles.
+
+# ---------------- maths
+[Golden ratio | phi 1.618]
+The golden ratio is about 1.618, often written with the Greek letter phi.
+It is the limit of the ratio between neighbouring numbers in the Fibonacci sequence.
+
+[Euler's constant | euler 2.718 natural logarithm]
+Euler's number, written e, is about 2.71828. It is the base of the natural logarithm and shows up in growth and decay.
+
+[Factorial | factorials]
+The factorial of a number n, written n!, is n multiplied by every whole number below it down to 1.
+For example 5! is 120, and 0! is defined as 1.
+
+[Mean median and mode | average statistics]
+The mean is the sum of the numbers divided by how many there are. The median is the middle value when they are sorted.
+The mode is the value that appears most often.
+
+# ---------------- computing
+[DNS | domain name system domain names]
+DNS, the Domain Name System, is the internet's phone book: it turns names like example.com into the IP addresses computers use.
+
+[IP address | ipv4 ipv6 internet protocol address]
+An IP address is the number that identifies a device on a network. IPv4 addresses are four numbers from 0 to 255, such as 192.168.0.1.
+IPv6 addresses are 128 bits long, which gives far more of them.
+
+[SQL | structured query language relational]
+SQL, Structured Query Language, is the language used to ask relational databases for data.
+A query like SELECT name FROM users WHERE age > 18 picks rows from a table.
+
+[HTML and CSS | html css styling]
+HTML describes the structure of a web page: headings, paragraphs, links and images.
+CSS describes how it looks: colours, fonts and layout.
+
+[GPU | graphics card graphics processing unit]
+A GPU, graphics processing unit, has thousands of small cores that do many simple calculations at once.
+It was built for graphics, and it is also what most neural networks are trained on.
+
+[SSD | solid state hdd]
+An SSD, solid-state drive, stores data in flash memory with no moving parts.
+It is much faster than a spinning hard disk drive.
+
+[Binary search | halving]
+Binary search finds an item in a sorted list by checking the middle and discarding half each time, so it takes about log2(n) steps.
+With 100 possibilities it never takes more than 7 checks, because 2 to the power 7 is 128.
+
+[Sorting algorithm | quicksort mergesort sort]
+A sorting algorithm puts items in order. Merge sort and quicksort take about n log n steps on average, while simple methods like bubble sort take n squared.
+
+[Hash table | hashmap]
+A hash table stores key and value pairs and finds a key in about one step on average by turning it into an array position with a hash function.
+
+[Stack and queue | lifo fifo]
+A stack is last in, first out, like a pile of plates. A queue is first in, first out, like people waiting in line.
+
+[Unicode and UTF-8 | unicode utf8 emoji encoding]
+Unicode gives every character, from letters to emoji, its own number, and there are over 150,000 of them.
+UTF-8 stores those numbers in 1 to 4 bytes, and the first 128 match ASCII.
+
+[ASCII | ascii]
+ASCII is an old character code with 128 entries that fit in 7 bits. For example, capital A is 65 and lowercase a is 97.
+
+[Alan Turing | turing machine enigma bletchley]
+Alan Turing was a British mathematician who described the Turing machine in 1936, the idea behind modern computers.
+During World War II he helped break the German Enigma code at Bletchley Park.
+
+[Ada Lovelace | lovelace babbage]
+Ada Lovelace was an English mathematician who wrote the first published computer algorithm, in 1843, for Charles Babbage's Analytical Engine.
+She is often called the first programmer.
+
+[Moore's law | transistors doubling]
+Moore's law is the observation, made by Gordon Moore in 1965, that the number of transistors on a chip doubles roughly every two years.
+
+[Bluetooth | wireless]
+Bluetooth is a short-range wireless standard. It is named after Harald Bluetooth, a 10th century Danish king who united tribes, as the technology aims to unite devices.
+
+# ---------------- history and culture
+[Cold War | cold war ussr soviet union]
+The Cold War was the long rivalry between the United States and the Soviet Union, from about 1947 until the Soviet Union ended in 1991.
+It never became a direct war between the two, but it drove the arms race and the space race.
+
+[Berlin Wall | berlin wall east germany]
+The Berlin Wall was built in 1961 to separate East and West Berlin, and its fall came on 9 November 1989.
+Germany reunified in October 1990.
+
+[Renaissance | renaissance leonardo michelangelo]
+The Renaissance was a period of art and learning in Europe from the 14th to the 17th century, which began in Italy.
+Leonardo da Vinci and Michelangelo are two of its best known artists.
+
+[Magna Carta | 1215 charter]
+The Magna Carta was a charter signed by King John of England in 1215 that limited the king's power.
+It is seen as an early step toward the rule of law.
+
+[American independence | declaration of independence 4 july 1776]
+The United States Declaration of Independence was adopted on 4 July 1776, announcing that the thirteen colonies were free of British rule.
+
+[Great Wall of China | great wall wall of china]
+The Great Wall of China is a series of walls built over many centuries, with a total length of more than 20,000 kilometres.
+It is a myth that it can be seen from space with the naked eye.
+
+[Olympic Games | olympics olympic]
+The Olympic Games are held every four years. The modern Games began in Athens in 1896.
+Paris hosted the 2024 Summer Games, and Los Angeles will host in 2028.
+
+[FIFA World Cup | world cup football soccer]
+The FIFA World Cup is the top football (soccer) tournament, held every four years. Argentina won in 2022.
+The 2026 tournament was hosted jointly by the United States, Canada and Mexico.
+
+[Cricket | odi t20 ipl]
+Cricket is a bat and ball game between two teams of eleven players. The main formats are Test matches, one-day internationals and Twenty20.
+India won the one-day World Cup in 1983 and 2011.
+
+[Chess | chaturanga checkmate]
+Chess is a board game for two on 64 squares, where each side starts with 16 pieces and the aim is to checkmate the other king.
+It developed from chaturanga, a game played in India around the 6th century.

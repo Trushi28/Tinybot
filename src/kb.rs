@@ -11,8 +11,11 @@ use std::io::Write;
 
 const DEFAULT_KB: &str = include_str!("../kb.txt");
 pub const USER_KB: &str = "kb_user.txt";
-/// below this a topic only half-explains the question and should not be offered as an answer
-pub const MIN_COVERAGE: f32 = 0.7;
+/// below this a topic only half-explains the question and should not be offered as an answer.
+/// Coverage is a ratio of IDF weights, so it drifts as topics are added: at 0.70, "what is the capital of mars"
+/// (the rare word "Mars" explains it, "capital" does not) crossed the line once the knowledge base grew from
+/// 104 to 174 topics. Real questions score 1.0; the half-explained ones sit at 0.67 to 0.74.
+pub const MIN_COVERAGE: f32 = 0.75;
 
 /// words that carry no topic: dropped from queries and documents
 const STOP: &[&str] = &[
@@ -576,6 +579,45 @@ mod tests {
         ] {
             let a = ask(&k, q).unwrap_or_else(|| panic!("no answer for {q:?}"));
             assert!(a.contains(want), "{q:?} -> {a}");
+        }
+    }
+
+    #[test]
+    fn newer_topics_answer_and_do_not_steal_older_ones() {
+        let k = kb();
+        for (q, want) in [
+            ("what is the capital of turkey", "Ankara"),
+            ("capital of the netherlands", "Amsterdam"),
+            ("what language do they speak in switzerland", "Romansh"),
+            ("what is the currency of south korea", "won"),
+            ("which state is hyderabad the capital of", "Telangana"),
+            ("how many states are there in india", "28 states"),
+            ("when did chandrayaan 3 land", "23 August 2023"),
+            ("who was the first human in space", "Gagarin"),
+            ("how fast is a cheetah", "100 km/h"),
+            ("how many neurons are in the brain", "86 billion"),
+            ("what is the speed of sound", "343"),
+            ("what is absolute zero", "273.15"),
+            ("what does dns do", "IP addresses"),
+            ("what is binary search", "log2"),
+            ("who was ada lovelace", "algorithm"),
+            ("when did the berlin wall fall", "1989"),
+            ("how many pieces does each side have in chess", "16"),
+            // older topics must still win their own questions
+            ("what is the capital of france", "Paris"),
+            ("how many people live in france", "68 million"),
+            ("who invented the world wide web", "Berners-Lee"),
+            ("when did humans land on the moon", "1969"),
+            ("how tall is mount everest", "8,849"),
+            ("what is a neural network", "layers"),
+            ("explain the fibonacci sequence", "sum"),
+        ] {
+            let a = ask(&k, q).unwrap_or_else(|| panic!("no answer for {q:?}"));
+            assert!(a.contains(want), "{q:?} -> {a}");
+        }
+        // still declines nonsense instead of grabbing a nearby topic
+for q in ["what is the capital of mars", "what is the capital of jupiter", "capital of the moon", "what is the language of saturn", "what is the population of venus"] {
+            assert!(ask(&k, q).is_none(), "{q:?} should be declined");
         }
     }
 

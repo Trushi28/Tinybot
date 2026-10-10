@@ -107,6 +107,80 @@ fn hash32(a: u32, b: u32) -> u32 {
 }
 
 // ---------------- text helpers ----------------
+
+/// Terminal columns one character takes: 0 for control characters, combining marks and joiners, 2 for CJK,
+/// fullwidth forms and emoji, 1 for everything else. (Small hand-written table, the project has no dependencies.)
+fn cw(c: char) -> usize {
+    let u = c as u32;
+    const ZERO: &[(u32, u32)] = &[
+        (0x0000, 0x001F), (0x007F, 0x009F), (0x0300, 0x036F), (0x0483, 0x0489), (0x0591, 0x05BD), (0x0610, 0x061A), (0x064B, 0x065F), (0x0E31, 0x0E31), (0x0E34, 0x0E3A),
+        (0x0E47, 0x0E4E), (0x1AB0, 0x1AFF), (0x1DC0, 0x1DFF), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x2064), (0x20D0, 0x20FF), (0xFE00, 0xFE0F), (0xFE20, 0xFE2F),
+        (0x1F3FB, 0x1F3FF), (0xE0100, 0xE01EF),
+    ];
+    const WIDE: &[(u32, u32)] = &[
+        (0x1100, 0x115F), (0x231A, 0x231B), (0x23E9, 0x23EC), (0x23F0, 0x23F0), (0x23F3, 0x23F3), (0x25FD, 0x25FE), (0x2614, 0x2615), (0x2648, 0x2653), (0x267F, 0x267F),
+        (0x2693, 0x2693), (0x26A1, 0x26A1), (0x26AA, 0x26AB), (0x26BD, 0x26BE), (0x26C4, 0x26C5), (0x26CE, 0x26CE), (0x26D4, 0x26D4), (0x26EA, 0x26EA), (0x26F2, 0x26F3),
+        (0x26F5, 0x26F5), (0x26FA, 0x26FA), (0x26FD, 0x26FD), (0x2705, 0x2705), (0x270A, 0x270B), (0x2728, 0x2728), (0x274C, 0x274C), (0x274E, 0x274E), (0x2753, 0x2755),
+        (0x2757, 0x2757), (0x2795, 0x2797), (0x27B0, 0x27B0), (0x27BF, 0x27BF), (0x2B1B, 0x2B1C), (0x2B50, 0x2B50), (0x2B55, 0x2B55), (0x2E80, 0x303E), (0x3041, 0x33FF),
+        (0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xA000, 0xA4CF), (0xA960, 0xA97F), (0xAC00, 0xD7A3), (0xF900, 0xFAFF), (0xFE10, 0xFE19), (0xFE30, 0xFE6F), (0xFF00, 0xFF60),
+        (0xFFE0, 0xFFE6), (0x16FE0, 0x16FE4), (0x17000, 0x18CFF), (0x1B000, 0x1B2FF), (0x1F004, 0x1F004), (0x1F0CF, 0x1F0CF), (0x1F18E, 0x1F18E), (0x1F191, 0x1F19A),
+        (0x1F200, 0x1F265), (0x1F300, 0x1F64F), (0x1F680, 0x1F6C5), (0x1F6CC, 0x1F6CC), (0x1F6D0, 0x1F6D2), (0x1F6D5, 0x1F6D7), (0x1F6EB, 0x1F6EC), (0x1F6F4, 0x1F6FC),
+        (0x1F7E0, 0x1F7EB), (0x1F90C, 0x1F9FF), (0x1FA70, 0x1FAFF), (0x20000, 0x2FFFD), (0x30000, 0x3FFFD),
+    ];
+    let hit = |t: &[(u32, u32)]| t.iter().any(|&(a, b)| (a..=b).contains(&u));
+    if u < 0x300 {
+        return if u < 0x20 || (0x7F..=0x9F).contains(&u) { 0 } else { 1 };
+    }
+    if hit(ZERO) {
+        0
+    } else if hit(WIDE) {
+        2
+    } else {
+        1
+    }
+}
+
+/// Terminal columns a string takes. A zero-width joiner glues the next character onto the previous one
+/// (family and profession emoji), so the joined character adds nothing.
+fn text_w(s: &str) -> usize {
+    let (mut w, mut joined) = (0, false);
+    for c in s.chars() {
+        if !joined {
+            w += cw(c);
+        }
+        joined = c == '\u{200D}';
+    }
+    w
+}
+
+/// Split `s` after the longest prefix that fits in `width` columns. Always takes at least one character, so
+/// repeatedly splitting a string makes progress even when `width` is narrower than one wide character.
+fn split_w(s: &str, width: usize) -> (String, String) {
+    let (mut w, mut joined, mut end) = (0, false, 0);
+    for (i, c) in s.char_indices() {
+        let add = if joined { 0 } else { cw(c) };
+        if w + add > width && end > 0 {
+            break;
+        }
+        w += add;
+        joined = c == '\u{200D}';
+        end = i + c.len_utf8();
+    }
+    (s[..end].to_string(), s[end..].to_string())
+}
+
+/// Hard-wrap one line into pieces that each fit in `width` columns.
+fn chunk_w(line: &str, width: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = line.to_string();
+    while !rest.is_empty() {
+        let (head, tail) = split_w(&rest, width.max(1));
+        out.push(head);
+        rest = tail;
+    }
+    out
+}
+
 struct Row {
     s: String,
     w: usize,
@@ -117,12 +191,12 @@ impl Row {
         Row { s: String::new(), w: 0 }
     }
     fn plain(mut self, t: &str) -> Row {
-        self.w += t.chars().count();
+        self.w += text_w(t);
         self.s.push_str(t);
         self
     }
     fn styled(mut self, c: u8, t: &str) -> Row {
-        self.w += t.chars().count();
+        self.w += text_w(t);
         self.s.push_str(&fg(c, t));
         self
     }
@@ -148,9 +222,9 @@ fn wrap(segs: &[Seg], width: usize) -> Vec<Vec<Seg>> {
                 continue;
             }
             let mut word = word.to_string();
-            while word.chars().count() > width {
-                let head: String = word.chars().take(width).collect();
-                word = word.chars().skip(width).collect();
+            while text_w(&word) > width {
+                let (head, rest) = split_w(&word, width);
+                word = rest;
                 if col > 0 {
                     lines.push(vec![]);
                 }
@@ -158,7 +232,7 @@ fn wrap(segs: &[Seg], width: usize) -> Vec<Vec<Seg>> {
                 lines.push(vec![]);
                 col = 0;
             }
-            let wl = word.chars().count();
+            let wl = text_w(&word);
             let need = if col == 0 { wl } else { wl + 1 };
             if col + need > width && col > 0 {
                 lines.push(vec![]);
@@ -410,16 +484,13 @@ impl Ui {
             return vec![];
         }
         let title = format!("─ CONSOLE · {} ", self.con_title);
-        let mut out = vec![Row::new().styled(240, &title).styled(240, &"─".repeat(rw.saturating_sub(title.chars().count()))).pad(rw)];
+        let mut out = vec![Row::new().styled(240, &title).styled(240, &"─".repeat(rw.saturating_sub(text_w(&title)))).pad(rw)];
         let mut body: Vec<String> = Vec::new();
         for l in &self.console {
-            let cs: Vec<char> = l.chars().collect();
-            if cs.is_empty() {
+            if l.is_empty() {
                 body.push(String::new());
             }
-            for chunk in cs.chunks(rw) {
-                body.push(chunk.iter().collect());
-            }
+            body.extend(chunk_w(l, rw));
         }
         let room = max - 1;
         let hidden = body.len() > room;
@@ -453,9 +524,9 @@ impl Ui {
             head.push_str(&format!("─ {} learning ", ["◜", "◝", "◞", "◟"][(self.frame / 2 % 4) as usize]));
         }
         if let Some((d, l)) = app.s.next_timer() {
-            head.push_str(&format!("─ ⏱ {} {} ", fmt_dur(d.as_secs()), l.chars().take(12).collect::<String>()));
+            head.push_str(&format!("─ ⏱ {} {} ", fmt_dur(d.as_secs()), split_w(&l, 12).0));
         }
-        let head_w = head.chars().count();
+        let head_w = text_w(&head);
         let hc = if self.flash > 0 && self.frame % 2 == 0 { 229 } else { 208 };
         let mut out = String::new();
         out.push_str(&format!("\x1b[H{}\x1b[K\n", fg(240, "╭") + &fg(hc, &head) + &fg(240, &format!("{}╮", "─".repeat(w.saturating_sub(head_w + 2))))));
@@ -540,7 +611,7 @@ impl Ui {
                         (Who::Sys, _) => fg(245, t),
                         (Who::Toast, _) => fg(220, t),
                     };
-                    r = r.raw(styled, t.chars().count());
+                    r = r.raw(styled, text_w(t));
                 }
                 chat.push(r.pad(rw));
             }
@@ -869,6 +940,50 @@ mod tests {
                 for r in rows {
                     assert_eq!(r.w, LW, "{e} at t={t} has a row of width {} (strip ANSI: {:?})", r.w, r.s);
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn widths_count_terminal_columns() {
+        assert_eq!(text_w("hello"), 5);
+        assert_eq!(text_w("héllo"), 5);
+        assert_eq!(text_w("日本語"), 6);
+        assert_eq!(text_w("한글"), 4);
+        assert_eq!(text_w("Ｈｉ"), 4); // fullwidth latin
+        assert_eq!(text_w("😀"), 2);
+        assert_eq!(text_w("a😀b"), 4);
+        assert_eq!(text_w("e\u{301}"), 1); // combining accent
+        assert_eq!(text_w("👨\u{200d}👩\u{200d}👧"), 2); // joined family is one glyph
+        assert_eq!(text_w("🇮🇳"), 2); // flag = two regional indicators
+        assert_eq!(text_w("♥♡▓░"), 4); // symbols the UI itself draws stay narrow
+        assert_eq!(Row::new().plain("日本").styled(1, "a😀").pad(10).len() - fg(1, "a😀").len() - "日本".len(), 3); // padded to 10 columns
+    }
+
+    #[test]
+    fn split_and_chunk_respect_columns() {
+        assert_eq!(split_w("日本語です", 5), ("日本".to_string(), "語です".to_string()));
+        assert_eq!(split_w("abc", 10), ("abc".to_string(), String::new()));
+        // narrower than one wide character still makes progress
+        assert_eq!(chunk_w("日本", 1), vec!["日".to_string(), "本".to_string()]);
+        for line in ["你好世界你好世界你好世界", "😀😀😀😀😀😀😀😀 abc", "mixed 日本 and 😀 and plain text here"] {
+            for width in [3usize, 7, 12] {
+                let parts = chunk_w(line, width);
+                assert_eq!(parts.concat(), line);
+                for p in &parts {
+                    assert!(text_w(p) <= width.max(2), "{p:?} is {} wide, limit {width}", text_w(p));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn wrap_handles_cjk_and_emoji() {
+        let segs = vec![("你好世界你好世界你好世界 😀😀😀😀😀😀😀😀 hello wide world".to_string(), None)];
+        for width in [8usize, 12, 20] {
+            for l in wrap(&segs, width) {
+                let w: usize = l.iter().map(|(t, _)| text_w(t)).sum();
+                assert!(w <= width, "{l:?} is {w} wide, limit {width}");
             }
         }
     }

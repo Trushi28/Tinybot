@@ -138,6 +138,20 @@ pub fn try_calc(text: &str, ans: Option<f64>) -> Option<Result<f64, String>> {
         }
     }
     toks.retain(|t| *t != Tok::Word("".into()));
+    // A lone "-5", or a tight "555-1234" / "1990-2000" with no other operator, is a negative number,
+    // a phone number or a range, not a subtraction. "5 - 3", "5 minus 3" and "what is 10-3" still calculate.
+    if !explicit && !continues {
+        let only_minus = toks.iter().all(|t| matches!(t, Tok::Num(_) | Tok::Sym('-'))) && toks.iter().filter(|t| **t == Tok::Sym('-')).count() == 1;
+        if only_minus {
+            let lone_sign = toks.len() == 2 && toks[0] == Tok::Sym('-');
+            let cs: Vec<char> = low.chars().collect();
+            let tight = cs.windows(3).any(|w| w[0].is_ascii_digit() && w[1] == '-' && w[2].is_ascii_digit());
+            let asked = low.split_whitespace().next().is_some_and(|w| matches!(w, "what" | "whats" | "how" | "what's"));
+            if lone_sign || (tight && !asked) {
+                return None;
+            }
+        }
+    }
     if continues {
         // strip a leading "then"-style word already handled; prefix ans
         toks.insert(0, Tok::Word("ans".into()));
@@ -526,10 +540,12 @@ const CONV_FILLER: [&str; 17] = [
 pub fn convert_followup(text: &str, last: &Conv) -> Option<Result<(Conv, String), String>> {
     let toks: Vec<Tok> = lex(text)?.into_iter().filter(|t| !matches!(t, Tok::Word(w) if CONV_FILLER.contains(&w.as_str()) || w == "?") && *t != Tok::Sym('?')).collect();
     let that = lex(text)?.iter().any(|t| matches!(t, Tok::Word(w) if w == "that"));
+    // a bare unit word ("hours", "s", "m") is only a follow-up when it comes with a lead-in like "and in" / "to"
+    let lead = lex(text)?.iter().any(|t| matches!(t, Tok::Word(w) if ["and", "in", "to", "into", "as", "about", "bout", "convert"].contains(&w.as_str())));
     let toks: Vec<Tok> = toks.into_iter().filter(|t| !matches!(t, Tok::Word(w) if w == "that")).collect();
     let run = |v: f64, from: &str, to: &str| Some(run_conv(v, unit(from)?, unit(to)?));
     match toks.as_slice() {
-        [Tok::Word(u)] if unit(u).is_some() => {
+        [Tok::Word(u)] if lead && unit(u).is_some() => {
             if that { run(last.out, last.to, u) } else { run(last.val, last.from, u) }
         }
         [Tok::Num(n), Tok::Word(u)] if unit(u).is_some() => run(*n, u, last.to),

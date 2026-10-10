@@ -203,7 +203,12 @@ pub fn try_date(text: &str) -> Option<String> {
         }
         return Some(format!("{} — {when}.", fmt_date(d)));
     }
-    // "in 10 days", "3 weeks from now", "5 days ago"
+    // "in 10 days", "3 weeks from now", "5 days ago" — but not a story ("I slept 5 days ago", "we met 2 weeks ago")
+    let narrative = ["i", "ive", "im", "we", "he", "she", "they", "my", "our", "his", "her", "was", "were", "had", "have", "has"].iter().any(|w| has(w));
+    let asks = ["what", "whats", "when", "which", "date", "day", "today", "tell", "show"].iter().any(|w| has(w));
+    if narrative && !asks {
+        return None;
+    }
     let toks = lex(&low)?;
     for i in 0..toks.len().saturating_sub(1) {
         if let (Tok::Num(n), Tok::Word(u)) = (&toks[i], &toks[i + 1]) {
@@ -294,6 +299,50 @@ fn sanitize(s: &str, max: usize) -> String {
     s.chars().filter(|c| !c.is_control()).take(max).collect::<String>().trim().to_string()
 }
 
+/// Like `sanitize`, but when the text is too long it is cut at a word (or list-item) boundary,
+/// never in the middle of a word.
+fn sanitize_words(s: &str, max: usize) -> String {
+    let clean: String = s.chars().filter(|c| !c.is_control()).collect();
+    let clean = clean.trim();
+    if clean.chars().count() <= max {
+        return clean.to_string();
+    }
+    let cut: String = clean.chars().take(max).collect();
+    let mid_word = clean.chars().nth(max).is_some_and(|c| !c.is_whitespace() && c != ',');
+    let cut = match cut.rfind([' ', ',']) {
+        Some(i) if mid_word && i > 0 => cut[..i].to_string(),
+        _ => cut,
+    };
+    cut.trim().trim_end_matches(',').trim().to_string()
+}
+
+/// Add `v` to a comma-separated list (likes, dislikes). Duplicates are whole-item and case-insensitive,
+/// and when the list outgrows `cap` the oldest items are dropped so nothing is ever cut mid-word.
+fn add_to_list(cur: &str, v: &str, cap: usize) -> String {
+    let mut items: Vec<&str> = cur.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+    if items.iter().any(|i| i.to_lowercase() == v.to_lowercase()) {
+        return cur.to_string();
+    }
+    items.push(v);
+    while items.len() > 1 && items.join(", ").chars().count() > cap {
+        items.remove(0);
+    }
+    items.join(", ")
+}
+
+/// A value that stops mid-thought ("to play", "in the") is not worth remembering.
+fn dangling(v: &[String]) -> bool {
+    const TRANSITIVE: [&str; 24] = [
+        "play", "watch", "eat", "read", "drink", "listen", "do", "make", "go", "see", "have", "get", "be", "use", "take", "hear", "learn", "talk", "hang", "spend", "try", "buy", "visit", "wear",
+    ];
+    const FUNCTION: [&str; 17] = ["to", "the", "a", "an", "of", "with", "and", "or", "at", "in", "on", "for", "my", "your", "some", "than", "when"];
+    match v {
+        [] => true,
+        [to, verb] if to == "to" => TRANSITIVE.contains(&verb.as_str()),
+        [.., last] => FUNCTION.contains(&last.as_str()),
+    }
+}
+
 impl Memory {
     pub fn ephemeral() -> Memory {
         Memory::default()
@@ -354,7 +403,7 @@ impl Memory {
 
     pub fn set(&mut self, k: &str, v: &str) -> bool {
         let k = sanitize(k, 40);
-        let v = sanitize(v, if k.starts_with('_') { 4000 } else { 120 });
+        let v = if k.starts_with('_') { sanitize(v, 4000) } else { sanitize_words(v, 120) };
         if k.is_empty() || v.is_empty() || (self.facts.len() >= MAX_ITEMS + 40 && !self.facts.contains_key(&k)) {
             return false;
         }
@@ -491,7 +540,7 @@ pub fn try_facts(text: &str, mem: &mut Memory) -> Option<String> {
     let rest = &low[i + 1..];
     let val_ok = |from: usize| {
         let n = raw.len().saturating_sub(from);
-        (1..=6).contains(&n) && !low[from..].iter().any(|w| VALUE_STOP.contains(&w.as_str()))
+        (1..=6).contains(&n) && !low[from..].iter().any(|w| VALUE_STOP.contains(&w.as_str())) && !dangling(&low[from..])
     };
     let at = i + 1;
     match (rest.first().map(|s| s.as_str()), rest.get(1).map(|s| s.as_str())) {
@@ -506,19 +555,13 @@ pub fn try_facts(text: &str, mem: &mut Memory) -> Option<String> {
         (Some("hate" | "dislike"), _) if val_ok(at + 1) => {
             let v = join(at + 1, raw.len());
             let cur = mem.facts.get("dislikes").cloned().unwrap_or_default();
-            let nv = if cur.is_empty() { v.clone() } else if cur.to_lowercase().contains(&v.to_lowercase()) { cur } else { format!("{cur}, {v}") };
+            let nv = add_to_list(&cur, &v, 120);
             mem.set("dislikes", &nv).then(|| format!("Noted, you dislike {v}."))
         }
         (Some("like" | "love" | "enjoy"), _) if val_ok(at + 1) => {
             let v = join(at + 1, raw.len());
             let cur = mem.facts.get("likes").cloned().unwrap_or_default();
-            let nv = if cur.is_empty() {
-                v.clone()
-            } else if cur.to_lowercase().contains(&v.to_lowercase()) {
-                cur
-            } else {
-                format!("{cur}, {v}")
-            };
+            let nv = add_to_list(&cur, &v, 120);
             mem.set("likes", &nv).then(|| format!("Noted, you like {v}."))
         }
         _ => None,
