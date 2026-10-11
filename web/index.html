@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TinyBot: a chatbot small enough to read</title>
+  <meta name="description" content="A 251k-parameter neural chatbot written from scratch in Rust with zero dependencies. It runs entirely in your browser as WebAssembly, and you can watch it think.">
+  <meta name="color-scheme" content="dark light">
+  <meta property="og:title" content="TinyBot: a chatbot small enough to read">
+  <meta property="og:description" content="A 251k-parameter neural chatbot in pure Rust, running in your browser as WebAssembly. Watch the network think.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23ffb347'/%3E%3Ccircle cx='11' cy='14' r='2.6' fill='%230e0d0b'/%3E%3Ccircle cx='21' cy='14' r='2.6' fill='%230e0d0b'/%3E%3Cpath d='M10 21q6 4 12 0' stroke='%230e0d0b' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#chat">Skip to the chat</a>
+
+  <header class="top">
+    <a class="mark" href="#top" aria-label="TinyBot home"><span class="mark-face" aria-hidden="true">•‿•</span><span>tinybot</span></a>
+    <nav aria-label="Page">
+      <a href="#how">How it works</a>
+      <a href="#inside">Inside</a>
+      <a href="https://github.com/Trushi28/tinybot" rel="noopener">Source</a>
+      <button type="button" id="theme" class="icon" aria-label="Switch colour theme" title="Switch colour theme"><span aria-hidden="true">◐</span></button>
+    </nav>
+  </header>
+
+  <section class="hero" id="top">
+    <p class="eyebrow reveal">Rust · WebAssembly · zero dependencies</p>
+    <h1 class="reveal">A chatbot small enough to <em>read.</em></h1>
+    <p class="lede reveal">
+      TinyBot is a 251,000-parameter neural network, hand-written from scratch, that decides what you meant and answers.
+      It runs entirely in this tab. Nothing you type leaves your device, and on the right you can watch the network make each decision.
+    </p>
+    <dl class="stats reveal">
+      <div><dt>parameters</dt><dd>251k</dd></div>
+      <div><dt>model download</dt><dd>316 KB</dd></div>
+      <div><dt>per message</dt><dd>~40 µs</dd></div>
+      <div><dt>dependencies</dt><dd>0</dd></div>
+    </dl>
+  </section>
+
+  <section class="stage reveal" id="chat" aria-label="Chat with TinyBot">
+    <div class="console">
+      <div class="console-bar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="console-title" id="status">warming up…</span>
+        <span class="console-actions">
+          <button type="button" id="help" class="link">/help</button>
+          <button type="button" id="reset" class="link" title="Forget your notes, XP and progress on this device">forget me</button>
+        </span>
+      </div>
+      <div id="log" class="log" tabindex="0" aria-label="Conversation"></div>
+      <div id="announce" class="sr" aria-live="polite"></div>
+      <div class="chips" id="chips" hidden>
+        <button type="button" data-q="what is 12*(3+4)">12*(3+4)</button>
+        <button type="button" data-q="10 km to miles">10 km to miles</button>
+        <button type="button" data-q="tell me a joke">tell me a joke</button>
+        <button type="button" data-q="roll 3d6+2">roll 3d6+2</button>
+        <button type="button" data-q="set a timer for 10 seconds">10 s timer</button>
+        <button type="button" data-q="my favorite color is teal">my favorite colour is teal</button>
+        <button type="button" data-q="how many days until 2026-12-25">days until Christmas</button>
+      </div>
+      <form id="form" autocomplete="off">
+        <label class="sr" for="input">Message</label>
+        <span class="prompt" aria-hidden="true">you ▸</span>
+        <input id="input" type="text" maxlength="400" placeholder="say something, or try /help" disabled enterkeyhint="send" spellcheck="false">
+        <button type="submit" id="send" disabled>Send</button>
+      </form>
+    </div>
+
+    <aside class="brain" aria-label="What the network is thinking">
+      <div class="face-wrap">
+        <svg id="face" class="face" viewBox="0 0 200 160" role="img" aria-label="TinyBot's face" data-emo="neutral">
+          <rect class="head" x="14" y="12" width="172" height="136" rx="38"/>
+          <g id="eyes"></g>
+          <g id="mouth"></g>
+        </svg>
+        <p class="mood"><span id="mood">neutral</span></p>
+      </div>
+
+      <h2>Routed to</h2>
+      <p class="route" id="route"><span class="idle">waiting for your first message</span></p>
+
+      <h2>The network's top guesses</h2>
+      <ol class="bars" id="bars"><li class="idle">intent probabilities appear here</li></ol>
+
+      <h2>Words that mattered</h2>
+      <p class="words" id="words"><span class="idle">leave-one-word-out influence</span></p>
+
+      <p class="meter" id="meter" aria-live="off"></p>
+    </aside>
+  </section>
+
+  <section class="how" id="how">
+    <h2 class="sect">How it answers</h2>
+    <ol class="steps">
+      <li>
+        <span class="n">01</span>
+        <h3>Skills go first</h3>
+        <p>Maths, units, dates, dice, timers, notes: exact things are done by exact code, never guessed by a neural net. A safety net for crisis phrases also runs before everything else.</p>
+      </li>
+      <li>
+        <span class="n">02</span>
+        <h3>The network picks an intent</h3>
+        <p>A bidirectional GRU reads hashed word and character n-grams (so typos still land near their word) and scores 52 intents. That is the bar chart you see.</p>
+      </li>
+      <li>
+        <span class="n">03</span>
+        <h3>Context breaks ties</h3>
+        <p>A 24-turn memory and a learned intent-to-intent prior resolve "and in meters?", "again" and "what did I just say". Unsure? It asks instead of bluffing.</p>
+      </li>
+      <li>
+        <span class="n">04</span>
+        <h3>It remembers you</h3>
+        <p>Your name, notes, XP and mood are kept in this browser only. Clear them any time with <em>forget me</em>.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="inside" id="inside">
+    <h2 class="sect">Inside the box</h2>
+    <div class="grid">
+      <article>
+        <h3>Distilled</h3>
+        <p>A teacher ensemble of 3.2M parameters labels thousands of synthetic phrases; one 251k-parameter student learns to match it. The student ships, with int8 weights.</p>
+      </article>
+      <article>
+        <h3>From scratch</h3>
+        <p>Forward passes, backprop through time, Adam and the int8 file format are all hand-written, with tests that check every gradient against finite differences.</p>
+      </article>
+      <article>
+        <h3>Honest</h3>
+        <p>It is an intent router, not a language model. On phrases it never saw in training it picks the right intent about 81% of the time (about 71% with typos, from 5-fold cross-validation), it says "I don't know" when unsure, and it will still get things wrong.</p>
+      </article>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>Runs fully in your browser as WebAssembly: nothing you type is sent anywhere, and notes and XP are saved on this device only.
+    TinyBot is a small hobby model, not a person or a professional. If you are in danger or in crisis, contact your local emergency services or a crisis line.</p>
+    <p><a href="https://github.com/Trushi28/tinybot" rel="noopener">Source on GitHub</a></p>
+  </footer>
+
+  <noscript><p class="noscript">TinyBot needs JavaScript and WebAssembly.</p></noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

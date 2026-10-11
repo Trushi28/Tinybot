@@ -48,6 +48,15 @@ pub fn parse(src: &str, out: &mut Vec<Intent>) {
     }
 }
 
+/// Only the intents baked into the binary: no files read. This is what the browser build uses, and what
+/// the shipped `web/bot.bin` is trained on, so their tags always line up.
+pub fn load_embedded() -> Vec<Intent> {
+    let mut v = Vec::new();
+    parse(DEFAULT_INTENTS, &mut v);
+    v.retain(|i| !i.examples.is_empty());
+    v
+}
+
 /// intents.txt (or the copy baked into the binary) merged with learned.txt.
 pub fn load() -> Vec<Intent> {
     let src = fs::read_to_string(INTENTS_PATH).unwrap_or_else(|_| DEFAULT_INTENTS.to_string());
@@ -72,10 +81,12 @@ pub fn flatten(intents: &[Intent]) -> (Vec<String>, Vec<(usize, String)>) {
     (tags, ex)
 }
 
-/// Strip anything that could break the line-based file format.
+/// Strip anything that could break the line-based file format. Leading `[`, `#`, `>` and `@` are all
+/// syntax in these files (`[tag]`, comment, reply marker, `>@prev` context reply), and they can be mixed
+/// with spaces ("> @john hi"), so peel them off together with any whitespace between them.
 pub fn clean_line(s: &str) -> String {
     let s: String = s.chars().filter(|c| !c.is_control()).collect();
-    s.trim().trim_start_matches(['[', '#', '>']).trim().chars().take(200).collect()
+    s.trim_start_matches(|c: char| c.is_whitespace() || matches!(c, '[' | '#' | '>' | '@')).trim().chars().take(200).collect()
 }
 
 pub fn clean_tag(s: &str) -> String {

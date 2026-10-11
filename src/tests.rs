@@ -568,7 +568,7 @@ fn memory_skips_unfinished_likes_and_cuts_lists_cleanly() {
     let mut m = Memory::ephemeral();
     assert!(try_facts("i like to play", &mut m).is_none());
     assert!(try_facts("i like the", &mut m).is_none());
-    assert!(m.facts.get("likes").is_none());
+    assert!(!m.facts.contains_key("likes"));
     assert!(try_facts("i like to swim", &mut m).is_some()); // a finished thought is kept
     // a long likes list drops whole old items, never half a word, and never repeats an item
     let mut m = Memory::ephemeral();
@@ -674,4 +674,24 @@ fn art_only_reads_the_words_after_draw_or_sketch() {
     assert!(crate::art::draw("can you sketch me a rocket please", &mut r).starts_with("Here's a rocket:"));
     assert!(crate::art::draw("draw a picture of an owl", &mut r).starts_with("Here's a owl:"));
     assert!(crate::art::draw("ascii art of a fish", &mut r).starts_with("Here's a fish:"));
+}
+
+#[test]
+fn taught_text_cannot_turn_into_file_syntax() {
+    // `@` starts a `>@prev` context reply, so a taught reply like "@john hi" used to be filed as a reply for a
+    // previous intent called "john", leaving the new intent with no usable reply (the bot answered "...")
+    for (raw, want) in [("@john hi there", "john hi there"), ("> @john hi there", "john hi there"), (" >> [# @x y", "x y"), ("hello @ world", "hello @ world"), ("@@@", "")] {
+        assert_eq!(intents::clean_line(raw), want, "{raw:?}");
+    }
+    // and whatever is already sitting in a learned.txt written by the old version still answers
+    let mut v = intents::load();
+    intents::parse("[taught_old]\nwhat is the secret word\n> @john hi there\n\n[taught_empty]\nsay nothing\n", &mut v);
+    let (tags, ex) = intents::flatten(&v);
+    let t = Ensemble::train(&ex, tags, &[TINY, TINY], 1, 1.0, 0);
+    let b = Brain::new(Ensemble::distill(&t, &ex, TINY, 1, 1.0, 0), v);
+    let mut s = Session::new(Memory::ephemeral(), false);
+    let (text, _) = b.answer(&mut s, b.tag_idx("taught_old").unwrap(), "what is the secret word");
+    assert_eq!(text, "hi there");
+    let (text, _) = b.answer(&mut s, b.tag_idx("taught_empty").unwrap(), "say nothing");
+    assert!(text.contains("don't have a reply"), "{text}");
 }

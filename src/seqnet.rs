@@ -6,6 +6,9 @@
 //! through time for the GRU, Adam for the dense weights, plain SGD for the embedding rows. The tests
 //! check every gradient against finite differences.
 
+// Dense math kernels index several parallel arrays with one loop variable; iterator zips would obscure them.
+#![allow(clippy::needless_range_loop)]
+
 use crate::model::Cfg;
 use crate::rng::Rng;
 use crate::text::{bucket_in, Tok, MAXT};
@@ -193,6 +196,7 @@ fn head_forward(ps: &[P], iw: usize, pin: usize, hid: usize, c: usize, p: &[f32]
     (z1, lg)
 }
 
+#[allow(clippy::too_many_arguments)] // flat numeric kernel: slices in, gradients out
 fn head_backward(ps: &[P], gs: &mut [Vec<f32>], iw: usize, pin: usize, hid: usize, c: usize, p: &[f32], z1: &[f32], dl: &[f32]) -> Vec<f32> {
     outer_add(&mut gs[iw + 2], hid, dl, z1);
     for k in 0..c {
@@ -378,6 +382,7 @@ struct GruFwd {
     probs: Vec<f32>,
 }
 
+#[allow(clippy::too_many_arguments)] // flat numeric kernel
 fn gru_dir_forward(wx: &[f32], wh: &[f32], bx: &[f32], bh: &[f32], xs: &[f32], t: usize, in_: usize, h: usize) -> DirCache {
     let mut c = DirCache { hs: vec![0.0; (t + 1) * h], r: vec![0.0; t * h], z: vec![0.0; t * h], n: vec![0.0; t * h], ghn: vec![0.0; t * h] };
     let mut gi = vec![0.0; 3 * h];

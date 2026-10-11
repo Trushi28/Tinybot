@@ -1,35 +1,8 @@
-//! tinybot: a small intent-routing chatbot in pure Rust, zero dependencies.
-//!
-//! Engine   : 5-net teacher ensemble distilled into ONE compact int8 student (68k to 4M params)
-//! Knowledge: BM25 retrieval over kb.txt, kb_user.txt (/know) and facts.txt for open questions
-//! Context  : 24-turn memory, `>@prev` replies, learned intent-flow prior, follow-up resolution
-//!            ("and in meters?", "double that", "again", "what did I just say")
-//! Skills   : calculator, units, dates, dice, memory, todo list (all from scratch)
-//! Fun      : mood + sulking, XP/levels/titles, intent dex, badges, streaks, games
-//! UI       : animated terminal UI with a live view into the network (`--plain` for a bare REPL)
-
-mod art;
-mod bot;
-mod calc;
-mod cmds;
-mod facts;
-mod intents;
-mod kb;
-mod model;
-mod persona;
-mod rng;
-mod seqnet;
-mod skills;
-mod text;
-#[cfg(test)]
-mod tests;
-mod train;
-mod tui;
-
-use bot::{Brain, Session};
-use cmds::App;
-use model::Ensemble;
-use skills::Memory;
+use tinybot::bot::{Brain, Session};
+use tinybot::cmds::{self, App};
+use tinybot::model::Ensemble;
+use tinybot::skills::Memory;
+use tinybot::{intents, train, tui};
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::time::Instant;
 use std::{env, process};

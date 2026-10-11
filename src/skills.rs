@@ -8,12 +8,11 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 // ---------------- dates (proleptic Gregorian, UTC) ----------------
 
 pub fn now_secs() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    crate::clock::unix_ms().div_euclid(1000)
 }
 
 // ---------------- local time zone (no crates) ----------------
@@ -28,7 +27,7 @@ pub fn set_tz_override(minutes: Option<i32>) {
     TZ_OVERRIDE.store(minutes.unwrap_or(TZ_UNSET), Ordering::Relaxed);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "host-clock"), not(target_arch = "wasm32")))]
 fn detect_tz() -> Option<i32> {
     let out = std::process::Command::new("date").arg("+%z").stdin(std::process::Stdio::null()).output().ok()?;
     if !out.status.success() {
@@ -37,9 +36,9 @@ fn detect_tz() -> Option<i32> {
     parse_tz(String::from_utf8_lossy(&out.stdout).trim())
 }
 
-#[cfg(not(unix))]
+#[cfg(any(not(unix), feature = "host-clock", target_arch = "wasm32"))]
 fn detect_tz() -> Option<i32> {
-    None
+    crate::clock::host_tz_offset_min()
 }
 
 /// "+5:30", "+0530", "-8", "5.5", "utc+5:30" -> minutes east of UTC
@@ -349,31 +348,35 @@ impl Memory {
     }
 
     pub fn load(path: &str) -> Memory {
-        let mut m = Memory { path: Some(path.to_string()), ..Default::default() };
-        for line in fs::read_to_string(path).unwrap_or_default().lines() {
+        let mut m = Memory::from_text(&fs::read_to_string(path).unwrap_or_default());
+        m.path = Some(path.to_string());
+        m
+    }
+
+    /// Parse the `fact:` / `todo:` / `note:` line format (what `to_text` writes). Bad lines are skipped.
+    pub fn from_text(src: &str) -> Memory {
+        let mut m = Memory::default();
+        for line in src.lines() {
             if let Some(rest) = line.strip_prefix("fact:") {
-                if let Some((k, v)) = rest.split_once('=') {
-                    if m.facts.len() < MAX_ITEMS + 40 {
+                if let Some((k, v)) = rest.split_once('=')
+                    && m.facts.len() < MAX_ITEMS + 40 {
                         let k = sanitize(k, 40);
                         let cap = if k.starts_with('_') { 4000 } else { 120 };
                         m.facts.insert(k, sanitize(v, cap));
                     }
-                }
             } else if let Some(t) = line.strip_prefix("note:") {
                 if m.notes.len() < MAX_ITEMS {
                     m.notes.push(sanitize(t, 160));
                 }
-            } else if let Some(t) = line.strip_prefix("todo:") {
-                if m.todos.len() < MAX_ITEMS {
+            } else if let Some(t) = line.strip_prefix("todo:")
+                && m.todos.len() < MAX_ITEMS {
                     m.todos.push(sanitize(t, 120));
                 }
-            }
         }
         m
     }
 
-    pub fn save(&self) {
-        let Some(p) = &self.path else { return };
+    pub fn to_text(&self) -> String {
         let mut out = String::new();
         for (k, v) in &self.facts {
             out.push_str(&format!("fact:{k}={v}\n"));
@@ -384,6 +387,12 @@ impl Memory {
         for n in &self.notes {
             out.push_str(&format!("note:{n}\n"));
         }
+        out
+    }
+
+    pub fn save(&self) {
+        let Some(p) = &self.path else { return };
+        let out = self.to_text();
         let tmp = format!("{p}.tmp");
         if fs::write(&tmp, out).is_ok() {
             let _ = fs::rename(&tmp, p);
@@ -505,17 +514,16 @@ pub fn try_facts(text: &str, mem: &mut Memory) -> Option<String> {
     }
 
     // "my favorite color is" with nothing after it: ask instead of letting the router guess
-    if matches!(l(raw.len() - 1), "is" | "are") {
-        if let Some(i) = low.iter().position(|w| w == "my") {
+    if matches!(l(raw.len() - 1), "is" | "are")
+        && let Some(i) = low.iter().position(|w| w == "my") {
             let nk = raw.len() - 1 - i - 1;
             if (1..=4).contains(&nk) && low[i + 1..raw.len() - 1].iter().all(|w| w.chars().all(|c| c.is_alphabetic())) {
                 return Some(format!("Your {} is...? Tell me and I'll remember it.", join(i + 1, raw.len() - 1).to_lowercase()));
             }
         }
-    }
     // store: "my K is V"
-    if let Some(i) = low.iter().position(|w| w == "my") {
-        if let Some(j) = (i + 1..low.len()).find(|&j| low[j] == "is" || low[j] == "are") {
+    if let Some(i) = low.iter().position(|w| w == "my")
+        && let Some(j) = (i + 1..low.len()).find(|&j| low[j] == "is" || low[j] == "are") {
             let (nk, nv) = (j - i - 1, raw.len() - j - 1);
             let key = join(i + 1, j).to_lowercase();
             if (1..=4).contains(&nk)
@@ -534,7 +542,6 @@ pub fn try_facts(text: &str, mem: &mut Memory) -> Option<String> {
                 }
             }
         }
-    }
     // store: "i live in V", "i work at V", "i like V"
     let i = low.iter().position(|w| w == "i")?;
     let rest = &low[i + 1..];
@@ -611,13 +618,12 @@ pub fn try_todo(text: &str, mem: &mut Memory) -> Option<String> {
             } else {
                 return Some("There's no item with that number.".into());
             }
-        } else if strict {
-            if let Some(pos) = mem.todos.iter().position(|it| low.contains(&it.to_lowercase())) {
+        } else if strict
+            && let Some(pos) = mem.todos.iter().position(|it| low.contains(&it.to_lowercase())) {
                 let it = mem.todos.remove(pos);
                 mem.save();
                 return Some(format!("Removed \"{it}\"."));
             }
-        }
         return None;
     }
     // add X to my list / put X on my list / todo: X / remind me to X
@@ -683,16 +689,16 @@ pub fn try_notes(text: &str, mem: &mut Memory) -> Option<String> {
     let lw: Vec<&str> = low.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
     let has = |w: &str| lw.contains(&w);
     let first = lw.first().copied().unwrap_or("");
-    let list = |m: &Memory, hits: Vec<(usize, &String)>| {
+    let list = |hits: Vec<(usize, &String)>| {
         if hits.is_empty() {
             "No notes found.".to_string()
         } else {
-            format!("Your notes:\n{}", hits.iter().map(|(i, n)| format!("{}. {n}", i + 1)).collect::<Vec<_>>().join("\n")) + if m.notes.is_empty() { "" } else { "" }
+            format!("Your notes:\n{}", hits.iter().map(|(i, n)| format!("{}. {n}", i + 1)).collect::<Vec<_>>().join("\n"))
         }
     };
     if (has("notes") || (has("note") && has("my"))) && lw.len() <= 6 && ["show", "list", "read", "view", "see", "what", "whats", "display", "my"].contains(&first) && !has("add") {
         let all: Vec<(usize, &String)> = mem.notes.iter().enumerate().collect();
-        return Some(if mem.notes.is_empty() { "You have no notes yet. Try \"note: buy stamps\".".to_string() } else { list(mem, all) });
+        return Some(if mem.notes.is_empty() { "You have no notes yet. Try \"note: buy stamps\".".to_string() } else { list(all) });
     }
     if (has("search") || has("find")) && (has("notes") || has("note")) {
         let q = lw.iter().skip_while(|w| **w != "for" && **w != "about").nth(1).copied().unwrap_or("");
@@ -700,7 +706,7 @@ pub fn try_notes(text: &str, mem: &mut Memory) -> Option<String> {
             return None;
         }
         let hits: Vec<(usize, &String)> = mem.notes.iter().enumerate().filter(|(_, n)| n.to_lowercase().contains(q)).collect();
-        return Some(list(mem, hits));
+        return Some(list(hits));
     }
     if (first == "clear" || first == "delete" || first == "remove") && (has("notes") || has("note")) {
         if has("all") || first == "clear" {
@@ -742,11 +748,10 @@ fn parse_md(s: &str) -> Option<(i64, i64)> {
     let low = s.to_lowercase();
     for w in low.split_whitespace() {
         let b = w.trim_matches(|c: char| !c.is_ascii_digit() && c != '-');
-        if b.len() == 10 && b.as_bytes()[4] == b'-' && b.as_bytes()[7] == b'-' {
-            if let (Ok(m), Ok(d)) = (b[5..7].parse::<i64>(), b[8..10].parse::<i64>()) {
+        if b.len() == 10 && b.as_bytes()[4] == b'-' && b.as_bytes()[7] == b'-'
+            && let (Ok(m), Ok(d)) = (b[5..7].parse::<i64>(), b[8..10].parse::<i64>()) {
                 return valid_md((m, d));
             }
-        }
     }
     let toks: Vec<String> = low.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).map(String::from).collect();
     let mut month = None;

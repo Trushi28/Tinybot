@@ -1,4 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone)]
 pub struct Rng(u64);
@@ -11,6 +10,7 @@ impl Rng {
         z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
         Rng((z ^ (z >> 31)).max(1))
     }
+    #[allow(clippy::should_implement_trait)] // an infinite generator with no `None`, not an Iterator
     pub fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
@@ -40,8 +40,5 @@ impl Rng {
 }
 
 pub fn time_seed() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(1)
+    crate::clock::seed()
 }

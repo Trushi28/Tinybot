@@ -319,7 +319,7 @@ fn spec(emo: &str, t: u32, talking: bool) -> Spec {
         "joy" => s('◠', '◠', ' ', ' ', " ╰───╯ ", Some(120), true),
         "ecstatic" => s('★', '★', ' ', ' ', " \\___/ ", Some(213), true),
         "love" => s('♥', '♥', ' ', ' ', " ╰───╯ ", Some(204), true),
-        "laugh" => s('^', '^', ' ', ' ', if tf / 2 % 2 == 0 { " \\___/ " } else { " \\_o_/ " }, Some(120), true),
+        "laugh" => s('^', '^', ' ', ' ', if (tf / 2).is_multiple_of(2) { " \\___/ " } else { " \\_o_/ " }, Some(120), true),
         "anger" => s('●', '●', '\\', '/', "  ▔▔▔  ", Some(196), false),
         "grumpy" => s('▬', '▬', '\\', '/', "  ▔▔▔  ", Some(208), false),
         "sad" => s('╥', '╥', '/', '\\', " ╭───╮ ", Some(105), false),
@@ -328,7 +328,7 @@ fn spec(emo: &str, t: u32, talking: bool) -> Spec {
         "confused" => s('o', 'O', ' ', '/', "  ─?─  ", Some(220), false),
         "curious" => s('●', '◉', ' ', '‾', "  ─⌒─  ", Some(117), false),
         "think" => s(spin, spin, ' ', ' ', ["  ·    ", "  · ·  ", "  · · ·", "       "][tf / 3 % 4], Some(45), false),
-        "sleepy" => s('─', '─', ' ', ' ', if tf / 6 % 2 == 0 { "  ─o─  " } else { "  ───  " }, Some(244), false),
+        "sleepy" => s('─', '─', ' ', ' ', if (tf / 6).is_multiple_of(2) { "  ─o─  " } else { "  ───  " }, Some(244), false),
         "asleep" => s('─', '─', ' ', ' ', "  ─ ─  ", Some(240), false),
         "proud" => s('◠', '◠', ' ', ' ', " ╰───╯ ", Some(220), true),
         "wink" => s('●', '─', ' ', ' ', " ╰───╯ ", Some(159), false),
@@ -423,7 +423,7 @@ fn draw_face(emo: &str, t: u32, base: u8, talking: bool, look: i32, label: &str)
     let col = sp.col.unwrap_or(base);
     let x0 = 10;
     if emo != "sulk" {
-        let a = if t % 17 == 0 || (emo == "think" && t % 4 < 2) { '✦' } else { '·' };
+        let a = if t.is_multiple_of(17) || (emo == "think" && t % 4 < 2) { '✦' } else { '·' };
         cv.put(16, 0, a, col, false);
         cv.put(16, 1, '│', col, false);
     }
@@ -432,7 +432,7 @@ fn draw_face(emo: &str, t: u32, base: u8, talking: bool, look: i32, label: &str)
         cv.text(x0, y, "│           │", col);
     }
     cv.text(x0, 6, "╰───────────╯", col);
-    let blink = t % 31 == 0 && !matches!(emo, "sleepy" | "asleep" | "wink");
+    let blink = t.is_multiple_of(31) && !matches!(emo, "sleepy" | "asleep" | "wink");
     let shift = if matches!(emo, "neutral" | "joy") { look } else { 0 };
     let eye = |c: char| if blink && c != ' ' { '─' } else { c };
     cv.put(13 + shift, 4, eye(sp.el), col, false);
@@ -524,10 +524,10 @@ impl Ui {
             head.push_str(&format!("─ {} learning ", ["◜", "◝", "◞", "◟"][(self.frame / 2 % 4) as usize]));
         }
         if let Some((d, l)) = app.s.next_timer() {
-            head.push_str(&format!("─ ⏱ {} {} ", fmt_dur(d.as_secs()), split_w(&l, 12).0));
+            head.push_str(&format!("─ ⏱ {} {} ", fmt_dur(d.as_secs()), split_w(l, 12).0));
         }
         let head_w = text_w(&head);
-        let hc = if self.flash > 0 && self.frame % 2 == 0 { 229 } else { 208 };
+        let hc = if self.flash > 0 && self.frame.is_multiple_of(2) { 229 } else { 208 };
         let mut out = String::new();
         out.push_str(&format!("\x1b[H{}\x1b[K\n", fg(240, "╭") + &fg(hc, &head) + &fg(240, &format!("{}╮", "─".repeat(w.saturating_sub(head_w + 2))))));
 
@@ -924,7 +924,7 @@ pub fn run(app: &mut App) {
     }
     app.s.persona.store(&mut app.s.mem);
     app.s.mem.save();
-    print!("\x1b[{};1H\x1b[?25h\n", ui.h);
+    println!("\x1b[{};1H\x1b[?25h", ui.h);
 }
 
 #[cfg(test)]

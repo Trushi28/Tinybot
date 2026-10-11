@@ -166,12 +166,7 @@ pub fn accuracy(m: &Ensemble, val: &Examples, rng: &mut Rng, typos: bool) -> f32
 }
 
 pub fn model_kb(m: &Ensemble) -> f32 {
-    let p = std::env::temp_dir().join(format!("tinybot_size_probe_{}.bin", std::process::id()));
-    let ps = p.to_string_lossy().to_string();
-    let _ = m.save(&ps);
-    let n = fs::metadata(&p).map(|x| x.len()).unwrap_or(0);
-    let _ = fs::remove_file(&p);
-    n as f32 / 1024.0
+    m.to_bytes().len() as f32 / 1024.0
 }
 
 pub fn fmt_params(n: usize) -> String {
@@ -382,12 +377,12 @@ pub fn model_is_current(m: &Ensemble, intents: &[Intent], o: &Opts) -> bool {
 pub fn bench(m: &Ensemble) -> (f32, f32) {
     let probes = ["hello there", "whats the weather like", "tell me a joke please", "i feel really down today", "thanks a lot", "who made you"];
     let n = 3000;
-    let t = Instant::now();
+    let t = crate::clock::mono_us();
     let mut sink = 0.0;
     for i in 0..n {
         sink += m.predict(probes[i % probes.len()]).probs[0];
     }
-    let us = t.elapsed().as_secs_f32() * 1e6 / n as f32;
+    let us = crate::clock::mono_us().saturating_sub(t) as f32 / n as f32;
     std::hint::black_box(sink);
     (us, 1e6 / us)
 }

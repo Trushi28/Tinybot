@@ -8,11 +8,12 @@ use crate::facts::{self, Facts};
 use crate::persona::{emotion_for, flavour, Persona};
 use crate::intents::Intent;
 use crate::model::{argmax, decide, Decision, Ensemble, Pred};
-use crate::rng::{time_seed, Rng};
+use crate::clock;
+use crate::rng::Rng;
 use crate::skills::*;
 use crate::text::words;
 use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const MAX_INPUT_CHARS: usize = 400;
 const GENERIC_FALLBACKS: [&str; 3] = [
@@ -65,7 +66,8 @@ pub struct Session {
     pub flow: HashMap<(String, String), f32>,
     /// true when a UI can announce timers while idle (the TUI); plain mode only reports them on your next message
     pub realtime: bool,
-    pub timers: Vec<(Instant, String)>,
+    /// (deadline on `clock::mono_us`, label)
+    pub timers: Vec<(u64, String)>,
     extra_toasts: Vec<String>,
     ans: Option<f64>,
     last_conv: Option<Conv>,
@@ -105,7 +107,7 @@ impl Session {
             last_conv: None,
             repeatable: None,
             last_pick: HashMap::new(),
-            rng: Rng::new(time_seed()),
+            rng: Rng::new(clock::seed()),
             pending: Pending::None,
             rps_score: (0, 0),
             rps_trans: [[0; 3]; 3],
@@ -114,26 +116,32 @@ impl Session {
     }
 
     pub fn load_flow(&mut self, path: &str) {
-        for line in std::fs::read_to_string(path).unwrap_or_default().lines().take(2000) {
+        self.flow_from_text(&std::fs::read_to_string(path).unwrap_or_default());
+    }
+
+    pub fn flow_from_text(&mut self, src: &str) {
+        for line in src.lines().take(2000) {
             let w: Vec<&str> = line.split(' ').collect();
-            if let [a, b, n] = w.as_slice() {
-                if let Ok(n) = n.parse::<f32>() {
+            if let [a, b, n] = w.as_slice()
+                && let Ok(n) = n.parse::<f32>() {
                     self.flow.insert((a.to_string(), b.to_string()), n.min(1000.0));
                 }
-            }
         }
     }
 
     pub fn save_flow(&self, path: &str) {
+        let _ = std::fs::write(path, self.flow_to_text());
+    }
+
+    pub fn flow_to_text(&self) -> String {
         let mut v: Vec<_> = self.flow.iter().collect();
-        v.sort_by(|a, b| b.1.total_cmp(a.1));
-        let out: String = v.iter().take(500).map(|((a, b), n)| format!("{a} {b} {n:.1}\n")).collect();
-        let _ = std::fs::write(path, out);
+        v.sort_by(|a, b| b.1.total_cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        v.iter().take(500).map(|((a, b), n)| format!("{a} {b} {n:.1}\n")).collect()
     }
 
     /// Timers whose time has come (removes them).
     pub fn take_due(&mut self) -> Vec<String> {
-        let now = Instant::now();
+        let now = clock::mono_us();
         let mut due = Vec::new();
         self.timers.retain(|(t, l)| {
             if *t <= now {
@@ -147,8 +155,8 @@ impl Session {
     }
 
     pub fn next_timer(&self) -> Option<(Duration, &str)> {
-        let now = Instant::now();
-        self.timers.iter().map(|(t, l)| (t.saturating_duration_since(now), l.as_str())).min_by_key(|x| x.0)
+        let now = clock::mono_us();
+        self.timers.iter().map(|(t, l)| (Duration::from_micros(t.saturating_sub(now)), l.as_str())).min_by_key(|x| x.0)
     }
 
     pub fn push_turn(&mut self, user: &str, bot: &str, tag: &str) {
@@ -357,10 +365,10 @@ impl Brain {
 
     /// Everything the TUI's brain panel draws, in one pass.
     pub fn analyze(&self, s: &Session, text: &str) -> Analysis {
-        let t = std::time::Instant::now();
+        let t = clock::mono_us();
         let mut pred = self.model.predict(text);
         self.apply_flow(s, &mut pred.probs, words(text).len());
-        let micros = t.elapsed().as_secs_f32() * 1e6;
+        let micros = clock::mono_us().saturating_sub(t) as f32;
         Analysis { probs: pred.probs, cov: pred.cov, acts: self.model.activations(text), saliency: self.explain(text), micros }
     }
 
@@ -432,7 +440,7 @@ impl Brain {
     }
 
     /// `>@prev` replies win over generic ones; `=other` borrows another intent's replies.
-    fn answer(&self, s: &mut Session, k: usize, text: &str) -> (String, String) {
+    pub(crate) fn answer(&self, s: &mut Session, k: usize, text: &str) -> (String, String) {
         let tag = self.model.tags[k].clone();
         let mut ctx_tag = tag.clone();
         match tag.as_str() {
@@ -482,7 +490,7 @@ impl Brain {
                 let opts = self.intents[k].responses.clone();
                 let raw = self.pick(s, "riddle", &opts);
                 if let Some((q, a)) = raw.split_once('|') {
-                    let answers: Vec<String> = a.split('/').map(|x| norm(x)).filter(|x| !x.is_empty()).collect();
+                    let answers: Vec<String> = a.split('/').map(norm).filter(|x| !x.is_empty()).collect();
                     let shown = a.split('/').next().unwrap_or("").trim().to_string();
                     s.pending = Pending::Riddle { answers, shown, tries: 0 };
                     return (format!("{} (say \"give up\" to skip)", q.trim()), tag);
@@ -499,15 +507,21 @@ impl Brain {
         }
         let it = &self.intents[k];
         let ctx_opts: Vec<String> = it.ctx.iter().filter(|(p, _)| s.prev.as_deref() == Some(p.as_str())).map(|(_, r)| r.clone()).collect();
-        let opts = if ctx_opts.is_empty() { it.responses.clone() } else { ctx_opts };
+        let mut opts = if ctx_opts.is_empty() { it.responses.clone() } else { ctx_opts };
+        if opts.is_empty() {
+            // an intent whose only replies are `>@prev` lines (a hand-edited or older learned.txt) still answers
+            opts = it.ctx.iter().map(|(_, r)| r.clone()).collect();
+        }
+        if opts.is_empty() {
+            opts.push("I know what you mean, but I don't have a reply for that one yet.".to_string());
+        }
         let mut tpl = self.pick(s, &tag, &opts);
-        if let Some(other) = tpl.strip_prefix('=').map(|x| x.trim().to_string()) {
-            if let Some(ok) = self.tag_idx(&other) {
+        if let Some(other) = tpl.strip_prefix('=').map(|x| x.trim().to_string())
+            && let Some(ok) = self.tag_idx(&other) {
                 let o = self.intents[ok].responses.clone();
                 tpl = self.pick(s, &other, &o);
                 ctx_tag = other;
             }
-        }
         let mut out = self.fill(s, &tpl);
         if FLAVOURED.contains(&ctx_tag.as_str()) && s.rng.f32() < 0.35 {
             let pick = s.rng.below(3);
@@ -534,7 +548,7 @@ impl Brain {
         let text = match c {
             TimerCmd::Set(0, _) => "Pick a time between 1 second and 24 hours.".to_string(),
             TimerCmd::Set(secs, label) => {
-                s.timers.push((Instant::now() + Duration::from_secs(secs), label.clone()));
+                s.timers.push((clock::mono_us() + secs * 1_000_000, label.clone()));
                 let tail = if s.realtime { "" } else { " (plain mode: I'll announce it on your next message)" };
                 let lab = if label.is_empty() { String::new() } else { format!(" for \"{label}\"") };
                 format!("Timer set for {}{lab}.{tail}", fmt_dur(secs))
@@ -703,11 +717,10 @@ impl Brain {
             s.persona.forgive(&mut toasts);
         }
         // learn the conversational flow from confident intent answers
-        if let Some(p) = prev {
-            if !r.tag.starts_with("skill:") && !["fallback", "clarify", "clarify_no", "sulk"].contains(&r.tag.as_str()) && r.conf > 0.5 {
+        if let Some(p) = prev
+            && !r.tag.starts_with("skill:") && !["fallback", "clarify", "clarify_no", "sulk"].contains(&r.tag.as_str()) && r.conf > 0.5 {
                 *s.flow.entry((p, r.tag.clone())).or_default() += 1.0;
             }
-        }
         if r.tag != "skill:kb" {
             s.kb_ctx = None;
         }
@@ -735,15 +748,14 @@ impl Brain {
         s.last_input = Some(text.to_string());
 
         // deterministic safety net: runs before the network, games, sulking and every skill
-        if crisis_text(text) {
-            if let Some(k) = self.tag_idx("crisis") {
+        if crisis_text(text)
+            && let Some(k) = self.tag_idx("crisis") {
                 s.pending = Pending::None;
                 let (t, _) = self.answer(s, k, text);
                 let mut r = Reply::skill(t, "crisis");
                 r.debug = "[keyword safety net]".into();
                 return r;
             }
-        }
 
         // classify first: crisis messages and the sulk gate both need the neural read of this input
         let n_words = words(text).len();
@@ -762,8 +774,8 @@ impl Brain {
         // after the keyword net above, so it must not fire on skill-style input: numbers ("10 km to miles")
         // pushed a small model into the crisis class once, so digits and very short inputs are excluded
         // and it needs more than a vague hunch.
-        if let Decision::Answer(k) | Decision::Clarify(k) = decision {
-            if self.model.tags[k] == "crisis" && pred.probs[k] >= 0.35 && n_words >= 3 && !text.chars().any(|c| c.is_ascii_digit()) {
+        if let Decision::Answer(k) | Decision::Clarify(k) = decision
+            && self.model.tags[k] == "crisis" && pred.probs[k] >= 0.35 && n_words >= 3 && !text.chars().any(|c| c.is_ascii_digit()) {
                 s.pending = Pending::None;
                 let (t, _) = self.answer(s, k, text);
                 let mut r = Reply::skill(t, "crisis");
@@ -771,7 +783,6 @@ impl Brain {
                 r.debug = debug;
                 return r;
             }
-        }
 
         if s.persona.sulking > 0 {
             if matches!(top_tag, Some("sorry" | "compliment" | "thanks")) {
@@ -852,29 +863,27 @@ impl Brain {
             return Reply::skill(t, "skill:notes");
         }
         // "fact of the day" is explicit enough not to leave to the network
-        if text.to_lowercase().contains("fact of the day") {
-            if let Some(t) = self.fact_reply(s, text) {
+        if text.to_lowercase().contains("fact of the day")
+            && let Some(t) = self.fact_reply(s, text) {
                 return Reply::skill(t, "tell_fact");
             }
-        }
 
         // knowledge base: "more" continues the last answer; open questions the router isn't sure about land here
         if let Some((e, i)) = s.kb_ctx {
             let wants_more = matches!(norm(text).as_str(), "more" | "tell me more" | "go on" | "continue" | "what else" | "keep going" | "more please" | "elaborate" | "go ahead")
                 || matches!(decision, Decision::Answer(k) if self.model.tags[k] == "elaborate");
-            if wants_more {
-                if let Some((mut t, next)) = self.kb.more(e, i) {
+            if wants_more
+                && let Some((mut t, next)) = self.kb.more(e, i) {
                     s.kb_ctx = next.map(|n| (e, n));
                     if next.is_some() {
                         t.push_str(" (say \"more\" to continue)");
                     }
                     return Reply::skill(t, "skill:kb");
                 }
-            }
         }
         let router_sure = matches!(decision, Decision::Answer(_)) && conf >= 0.85 && pred.cov >= 0.85;
-        if !router_sure {
-            if let Some(h) = self.kb.lookup(text) {
+        if !router_sure
+            && let Some(h) = self.kb.lookup(text) {
                 let need = if matches!(decision, Decision::Answer(_)) { 0.85 } else { crate::kb::MIN_COVERAGE };
                 if h.coverage >= need {
                     let mut r = self.kb_reply(s, &h);
@@ -882,7 +891,6 @@ impl Brain {
                     return r;
                 }
             }
-        }
 
         // neural router
         let mut r = match decision {

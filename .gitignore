@@ -6,3 +6,4 @@ learned.txt
 flow.txt
 kb_user.txt
 Cargo.lock
+!web/bot.bin

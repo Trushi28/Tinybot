@@ -5,6 +5,10 @@ edition = "2024"
 
 [dependencies]
 
+[features]
+# route clock/random/time zone through host imports (what the wasm build does) so native tests can cover that path
+host-clock = []
+
 [profile.release]
 opt-level = 3
 lto = true

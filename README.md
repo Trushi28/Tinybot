@@ -1,11 +1,55 @@
+<div align="center">
+
 # TinyBot
 
-A chatbot with a face, a memory and a mood, written from scratch in Rust with **zero dependencies**.
+**A 251k-parameter neural chatbot, written from scratch in Rust with zero dependencies.**<br>
+It has skills, a memory, moods and a face, and it runs in your browser as WebAssembly.
 
-The brain is a small neural network you can size from **68k to 4M parameters** and build as a bag-of-features
-net, a temporal CNN or a bidirectional GRU (default: a **251k-parameter GRU, about 310 KB on disk**) that routes
-what you say to an intent. Around it sit hand-written skills (math, units, dates, timers, notes), a 24-turn conversation memory,
-and a terminal UI where you can watch the network think.
+![Rust 2024](https://img.shields.io/badge/Rust-2024_edition-e8590c?logo=rust&logoColor=white)
+![Zero dependencies](https://img.shields.io/badge/dependencies-0-2f9e44)
+![WebAssembly](https://img.shields.io/badge/runs_in-WebAssembly-654ff0?logo=webassembly&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-67_passing-2f9e44)
+
+**[▶ Try it live](https://YOUR-APP.vercel.app)** &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Run it yourself](#quick-start) &nbsp;·&nbsp; [Deploy it](#deploy-the-web-version)
+
+</div>
+
+---
+
+TinyBot is an **intent router, not a language model**, and that is the point. Every part of it is small enough to read:
+the tokenizer, the GRU and CNN with their backprop, Adam, distillation, the int8 file format, the calculator, the date
+maths, the terminal UI and the WebAssembly bridge. There is no ML framework, no crate, no Python, and no network call.
+Type a message and a **live panel shows the network's top guesses and which words drove the decision**.
+
+## At a glance
+
+| | |
+|---|---|
+| **The brain** | a bidirectional GRU with **251k parameters**, a **316 KB** int8 file, about **40 µs** per message |
+| **How it got small** | a 3.2M-parameter teacher ensemble labels synthetic phrases; one student learns to match it (distillation) |
+| **What surrounds it** | exact skills (maths, units, dates, timers, notes), a 24-turn memory, a safety net that runs before the network |
+| **Where it runs** | a terminal UI with a live view into the net, a plain REPL, or **a browser tab** (WebAssembly, nothing leaves the page) |
+| **Quality bar** | 67 tests incl. finite-difference gradient checks, fuzzing, hostile-input and corrupt-model tests · clippy clean |
+| **Honest numbers** | about **81%** of unseen phrases routed correctly (5-fold CV), it declines instead of guessing when unsure, **7.7%** wrong answers at the default threshold |
+
+## How it works
+
+```mermaid
+flowchart LR
+    U([your message]) --> S{{safety net<br/>keyword check}}
+    S -->|crisis phrase| H[plain, serious answer<br/>pointing to real help]
+    S --> K[skills first:<br/>maths · units · dates · timers · notes]
+    K -->|exact match| R([reply])
+    K -->|no match| N["neural router<br/>hashed n-grams → GRU → softmax"]
+    P[(24-turn memory +<br/>learned intent flow)] -. breaks ties .-> N
+    N -->|confident| R
+    N -->|unsure| Q[asks 'did you mean…?'<br/>or says it doesn't know]
+```
+
+Exact things are done by exact code. The network only decides *what you meant*, and when it is not sure it says so.
+The details, with measurements, are in [How it works](#how-it-works-in-detail) below.
+
+## The terminal UI
 
 ```
 ╭ TinyBot ─ Lv 3 Byte ─ ▓▓▓▓▓▓░░░░ 41/75 XP ─ mood happy ─ ♥♥♡♡♡ ─ ⏱ 04:32 stretch ─────────────╮
@@ -20,7 +64,7 @@ and a terminal UI where you can watch the network think.
 │ ─ BRAIN ────────────────────────── │ ─ CONSOLE · art ──────────────────────────────────────── │
 │ skill:convert  ██████████ 100%     │  /\_/\                                                   │
 │ ─ NEURONS ──────────────────────── │ ( o.o )                                                  │
-│   ▓▓ ░░ ██ ▒▒ ░░ ▓▓ ██ ░░         │  > ^ <                                                   │
+│   ▓▓ ░░ ██ ▒▒ ░░ ▓▓ ██ ░░          │  > ^ <                                                   │
 │ ─ STATUS ───────────────────────── │                                                          │
 │ ♥♥♡♡♡ friend (34 pts)              │                                                          │
 ╰────────────────────────────────────┴──────────────────────────────────────────────────────────╯
@@ -36,7 +80,7 @@ cargo run --release            # animated terminal UI
 cargo run --release -- chat --plain   # bare REPL (also used automatically when piped)
 ```
 
-No trained models are checked in (`bot.bin` and `models/` are in `.gitignore`), so the **first run trains the one it
+No native models are checked in (`bot.bin` and `models/` are in `.gitignore`; only the browser copy, `web/bot.bin`, is committed), so the **first run trains the one it
 needs**: about 2 minutes on one core for the default GRU, much less on several. After that it loads instantly. If you
 edit `intents.txt` the saved model is out of date and it retrains by itself. Teaching it with `/teach`, `/fix` or a
 "yes" to a clarification updates the saved model in the background, and that model is accepted at the next launch
@@ -48,6 +92,62 @@ See [Model sizes](#model-sizes-and-architectures).
 You need a terminal with 256-colour support and at least 84×30. Resize before launching; the layout is
 fixed at start. I tested on Linux through a pseudo-terminal; macOS terminals should behave the same, and
 Windows Terminal should work but is untested (use `--plain` if anything misrenders).
+
+## Run it in the browser
+
+The same engine compiles to a single WebAssembly module that a static page drives. Nothing the visitor types leaves
+their browser; notes and XP are kept in `localStorage`. The page shows the network's own view of every message: its
+top five intent probabilities, the words that mattered (leave-one-word-out influence) and the time the pass took.
+
+```bash
+rustup target add wasm32-unknown-unknown
+./build-web.sh --serve         # builds web/tinybot.wasm + web/bot.bin, then serves http://localhost:8000
+```
+
+How it is put together:
+
+| | |
+|---|---|
+| `src/web.rs` | a tiny C ABI (`tb_init`, `tb_reply`, `tb_state`, `tb_tick`) with JSON replies; plain Rust underneath, tested natively |
+| `src/clock.rs` | time, randomness and time zone behind one door: `std` natively, four host imports in the browser |
+| `web/tinybot.js` | the glue: instantiates the module, copies bytes in and out, saves state, restarts the module if it ever traps |
+| `web/` | the whole site: `index.html`, `style.css`, `app.js`, `tinybot.wasm`, `bot.bin` |
+
+What differs from the native app:
+
+- `/teach`, `/fix`, `/know`, `/unlearn` and `/retrain` are switched off: they rewrite files and retrain, which a browser
+  tab cannot do. Teach it natively, rebuild, and ship the new `bot.bin`.
+- `bot.bin` must be trained on the same `intents.txt` the wasm was built from. `build-web.sh` guarantees that by training
+  in an empty directory; the app refuses to start on a mismatch and says why.
+- The clock, randomness and time zone come from the page. `cargo test --lib --features host-clock` runs that same
+  code path natively.
+- Timers are announced live (the page polls once a second); native plain mode only reports them on your next message.
+
+## Deploy the web version
+
+`web/` is a plain static site, so any static host works. **Commit the two built files** (`web/tinybot.wasm` and
+`web/bot.bin`) and there is no build step on the host.
+
+| Host | Why pick it | Catch |
+|---|---|---|
+| **Vercel** (config included) | import the repo, framework "Other", no build command; `vercel.json` sets the `application/wasm` type and a strict content-security policy; a preview URL for every branch | free Hobby plan is for non-commercial use and has a monthly bandwidth cap |
+| **Cloudflare Pages** | unlimited bandwidth on the free plan, fast global network; the best choice if a post takes off | headers go in a `_headers` file instead of `vercel.json` |
+| **GitHub Pages** | zero extra accounts, lives next to the code | you cannot set response headers, so no content-security policy |
+| **Netlify** | similar to Vercel | headers go in `_headers` / `netlify.toml` |
+
+With Vercel: `vercel --prod` from the repo root, or connect the GitHub repo in the dashboard.
+
+## Testing
+
+```bash
+cargo test --release                                 # 67 tests: skills, parsers, gradients, fuzzing, the web API
+cargo test --release --lib --features host-clock     # the same suite through the browser clock path
+node --test tests/glue.test.mjs                      # the JS glue against a stand-in module
+node tests/e2e.mjs                                   # the real .wasm + shipped model, after ./build-web.sh
+```
+
+`.github/workflows/web.yml` runs all of it, and also checks that the built `.wasm` exports exactly the functions the page
+expects and imports exactly the four host functions.
 
 ## What it can do
 
@@ -171,7 +271,7 @@ noise. Every student is distilled from the same teacher (3 bag-of-features nets 
 - The 4M CNN and GRU were not benchmarked: the sweep process was killed partway through in my sandbox, and I
   didn't rerun those two rows. `sweep --archs cnn,gru --tiers max` will measure them if you have the cores.
 
-## How it works
+## How it works in detail
 
 ```
  your text
@@ -284,7 +384,9 @@ sanitised so input can't break the line-based formats. Nothing touches the netwo
 | `facts.rs` `art.rs` | the fact book · ASCII gallery |
 | `tui.rs` | the terminal UI: face canvas, particles, brain panel, console |
 | `cmds.rs` `train.rs` | slash commands · training pipeline, eval, benchmarks |
-| `tests.rs` + `seqnet.rs` | 55 tests, including finite-difference gradient checks for the CNN and GRU: calculator edge cases and hostile nesting, conversions, dates, memory, notes, timers, facts, games, corrupt model files, the terminal UI's column widths, sulking, a fuzz run |
+| `lib.rs` `main.rs` | the engine as a library · the native command line over it |
+| `clock.rs` `web.rs` | time, randomness and time zone behind one door (native or page-provided) · the browser API (`tb_*` C ABI, JSON replies, state export) |
+| `tests.rs` + `seqnet.rs` + `web.rs` | 67 tests, including finite-difference gradient checks for the CNN and GRU: calculator edge cases and hostile nesting, conversions, dates, memory, notes, timers, facts, games, corrupt model files, the terminal UI's column widths, sulking, a fuzz run |
 
 ```bash
 cargo test --release     # includes a 6,000-input fuzz run; trains several small models, about a minute
@@ -293,8 +395,31 @@ cargo run --release -- ctx       # does the context prior help?
 cargo run --release -- bench     # inference speed
 ```
 
+## Design notes
+
+Things that were less obvious than they look, in case you are building something similar:
+
+- **Distillation beat size.** With about a thousand training phrases the data is the ceiling: going from 250k to 4M
+  parameters bought roughly one point of accuracy, inside the noise. A teacher ensemble labelling synthetic phrases let a
+  251k student keep most of the teacher's accuracy at a tenth of the size.
+- **Never let the network be the only safety net.** A deterministic keyword check runs before the model, and a regression
+  test caught a 251k GRU answering "10 km to miles" with the crisis message.
+- **Porting to WebAssembly is mostly about what `std` cannot do there.** `SystemTime::now()` and `Instant::now()` panic on
+  `wasm32-unknown-unknown`, there are no threads, and no files. All time and randomness now go through one module
+  (`clock.rs`) with a feature flag that lets native tests exercise the browser path.
+- **Check the 32-bit assumptions.** Hashing uses `u64` and reduces before casting, so a model trained natively maps words
+  to the same buckets in a 32-bit wasm module.
+- **Budget the stack.** A wasm module gets 1 MiB by default and overflowing it traps, so a test runs the whole
+  load-and-answer path, hostile input included, on a 512 KiB thread.
+- **Ship the model with the module it was trained for.** The app refuses to start on a model/intents mismatch instead of
+  silently answering with the wrong labels.
+- **Make traps survivable.** If the module ever traps, the page restarts it from the last saved state.
+
 ## Honest limitations
 
+- The browser build is read-only: it cannot learn new intents, because that needs files and a training run. The WebAssembly
+  build itself is only as tested as its native twin: the Rust is exercised natively (including the browser clock path) and the
+  glue against a stand-in module, and the real `.wasm` is checked by `tests/e2e.mjs` after you build it.
 - It's an intent router, not a language model. It can't answer questions outside what's in `intents.txt`,
   `facts.txt` and the skills. When it doesn't know, it says so.
 - About 81% of held-out phrases are classified correctly, and it asks or declines instead of guessing when

@@ -5,6 +5,9 @@
 //! synthetic phrases (typos, dropped words, spliced phrases) and ONE small student learns to reproduce
 //! its soft predictions. The student ships, with int8 embedding rows and only the trained rows stored.
 
+// Dense math kernels index several parallel arrays with one loop variable; iterator zips would obscure them.
+#![allow(clippy::needless_range_loop)]
+
 use crate::rng::Rng;
 use crate::seqnet::{softmax, CnnNet, GruNet, Out};
 use crate::text::{bucket_in, fnv, noise, Input, BUCKETS, CHAR_BASE, FNV_INIT};
@@ -673,6 +676,14 @@ impl Ensemble {
 
     // ---------- serialisation: int8 rows (per-row scale) for trained rows only, bitmaps packed ----------
     pub fn save(&self, path: &str) -> io::Result<()> {
+        let b = self.to_bytes();
+        let tmp = format!("{path}.tmp");
+        fs::write(&tmp, b)?;
+        fs::rename(tmp, path)
+    }
+
+    /// The model file as bytes (what `save` writes). The web build ships this as `bot.bin`.
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut b = MAGIC.to_vec();
         for v in [self.tags.len(), self.nets.len()] {
             b.extend_from_slice(&(v as u32).to_le_bytes());
@@ -706,9 +717,7 @@ impl Ensemble {
                 }
             }
         }
-        let tmp = format!("{path}.tmp");
-        fs::write(&tmp, b)?;
-        fs::rename(tmp, path)
+        b
     }
 
     pub fn load(path: &str) -> Option<Ensemble> {
@@ -716,8 +725,15 @@ impl Ensemble {
         if fs::metadata(path).ok()?.len() > MAX_MODEL_BYTES {
             return None;
         }
-        let data = fs::read(path).ok()?;
-        let mut r = Reader { d: &data, p: 0 };
+        Ensemble::from_bytes(&fs::read(path).ok()?)
+    }
+
+    /// Parse a model file. Never panics on bad input; returns None instead.
+    pub fn from_bytes(data: &[u8]) -> Option<Ensemble> {
+        if data.len() as u64 > MAX_MODEL_BYTES {
+            return None;
+        }
+        let mut r = Reader { d: data, p: 0 };
         let mut emb_floats = 0usize;
         if r.take(MAGIC.len())? != MAGIC {
             return None;

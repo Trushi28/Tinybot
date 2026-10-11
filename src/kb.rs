@@ -387,6 +387,10 @@ impl Kb {
         self.entries.iter().filter(|e| !e.fact).count()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     fn idf(&self, df: usize) -> f32 {
         let n = self.entries.len() as f32;
         (1.0 + (n - df as f32 + 0.5) / (df as f32 + 0.5)).ln()

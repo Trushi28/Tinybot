@@ -202,7 +202,7 @@ impl Persona {
         if tag == "insult" {
             self.bond = self.bond.saturating_sub(3);
         }
-        if self.msgs % 10 == 0 {
+        if self.msgs.is_multiple_of(10) {
             self.bond += 1;
         }
         if self.bond_label() != bond_before && self.bond > 0 {
