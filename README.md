@@ -10,7 +10,7 @@ It has skills, a memory, moods and a face, and it runs in your browser as WebAss
 ![WebAssembly](https://img.shields.io/badge/runs_in-WebAssembly-654ff0?logo=webassembly&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-67_passing-2f9e44)
 
-**[▶ Try it live](https://YOUR-APP.vercel.app)** &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Run it yourself](#quick-start) &nbsp;·&nbsp; [Deploy it](#deploy-the-web-version)
+**[▶ Try it live](https://tinybot-self.vercel.app/)** &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Run it yourself](#quick-start) &nbsp;·&nbsp; [Deploy it](#deploy-the-web-version)
 
 </div>
 
