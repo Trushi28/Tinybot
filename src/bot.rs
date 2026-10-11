@@ -66,8 +66,8 @@ pub struct Session {
     pub flow: HashMap<(String, String), f32>,
     /// true when a UI can announce timers while idle (the TUI); plain mode only reports them on your next message
     pub realtime: bool,
-    /// (deadline on `clock::mono_us`, label)
-    pub timers: Vec<(u64, String)>,
+    /// (deadline on `clock::mono_us`, label, total length in microseconds)
+    pub timers: Vec<(u64, String, u64)>,
     extra_toasts: Vec<String>,
     ans: Option<f64>,
     last_conv: Option<Conv>,
@@ -143,7 +143,7 @@ impl Session {
     pub fn take_due(&mut self) -> Vec<String> {
         let now = clock::mono_us();
         let mut due = Vec::new();
-        self.timers.retain(|(t, l)| {
+        self.timers.retain(|(t, l, _)| {
             if *t <= now {
                 due.push(if l.is_empty() { "Time's up!".to_string() } else { format!("Time's up: {l}") });
                 false
@@ -156,7 +156,7 @@ impl Session {
 
     pub fn next_timer(&self) -> Option<(Duration, &str)> {
         let now = clock::mono_us();
-        self.timers.iter().map(|(t, l)| (Duration::from_micros(t.saturating_sub(now)), l.as_str())).min_by_key(|x| x.0)
+        self.timers.iter().map(|(t, l, _)| (Duration::from_micros(t.saturating_sub(now)), l.as_str())).min_by_key(|x| x.0)
     }
 
     pub fn push_turn(&mut self, user: &str, bot: &str, tag: &str) {
@@ -548,7 +548,7 @@ impl Brain {
         let text = match c {
             TimerCmd::Set(0, _) => "Pick a time between 1 second and 24 hours.".to_string(),
             TimerCmd::Set(secs, label) => {
-                s.timers.push((clock::mono_us() + secs * 1_000_000, label.clone()));
+                s.timers.push((clock::mono_us() + secs * 1_000_000, label.clone(), secs * 1_000_000));
                 let tail = if s.realtime { "" } else { " (plain mode: I'll announce it on your next message)" };
                 let lab = if label.is_empty() { String::new() } else { format!(" for \"{label}\"") };
                 format!("Timer set for {}{lab}.{tail}", fmt_dur(secs))

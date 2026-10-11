@@ -136,7 +136,9 @@ export async function loadBot(opts = {}) {
     /** Timers that have run out (array of strings). Call about once a second. */
     tick() {
       try {
-        return JSON.parse(readResult(ex.tb_tick()));
+        const out = JSON.parse(readResult(ex.tb_tick()));
+        if (out.length) persist(); // a timer that rang must not ring again after a reload
+        return out;
       } catch {
         return [];
       }

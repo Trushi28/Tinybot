@@ -41,6 +41,10 @@ assert.ok(say("/help").lines.length > 5);
 assert.match(say("/teach foo => bar").lines.join(" "), /native app/);
 assert.equal(say("/clear").clear, true);
 
+// timers reach the page, which draws the countdown window from them
+assert.equal(say("set a timer for 5 minutes").timers.length, 1);
+assert.equal(say("cancel my timer").timers.length, 0);
+
 // timers are announced by tick() (the host clock really drives them)
 assert.doesNotMatch(say("set a timer for 1 second").text, /plain mode/);
 await new Promise((r) => setTimeout(r, 1300));

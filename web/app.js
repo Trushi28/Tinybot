@@ -1,8 +1,27 @@
 import { loadBot } from "./tinybot.js";
+import { initTimers } from "./timers.js";
 
 const $ = (id) => document.getElementById(id);
 const log = $("log"), form = $("form"), input = $("input"), send = $("send"), status = $("status"), chips = $("chips");
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const timers = initTimers();
+
+// a short two-note chime when a timer rings (skipped silently if the browser blocks audio)
+function beep() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    [880, 1175].forEach((f, i) => {
+      const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + i * 0.18;
+      o.frequency.value = f;
+      o.connect(g); g.connect(ac.destination);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.15, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.start(t); o.stop(t + 0.32);
+    });
+    setTimeout(() => ac.close(), 1000);
+  } catch {}
+}
 
 /* ---------- theme ---------- */
 const root = document.documentElement;
@@ -157,6 +176,7 @@ function end(message) {
   input.placeholder = message;
 }
 function show(r) {
+  if (r.timers) timers.sync(r.timers);
   if (r.kind === "chat") {
     botSay(r.text, () => {
       for (const t of r.toasts || []) note("toast", t);
@@ -200,6 +220,8 @@ $("reset").addEventListener("click", () => {
 (async () => {
   try {
     bot = await loadBot();
+    try { timers.sync(bot.reply("/timers").timers); } catch {} // timers set on the other page
+    if (document.body.classList.contains("chat")) setTimeout(() => input.focus());
     status.textContent = "tinybot · gru · 251k params · running in your browser";
     input.disabled = send.disabled = false;
     chips.hidden = false;
@@ -209,6 +231,7 @@ $("reset").addEventListener("click", () => {
       for (const t of bot.tick()) {
         note("toast", "⏰ " + t);
         setFace("wow");
+        beep();
       }
     }, 1000);
   } catch (err) {

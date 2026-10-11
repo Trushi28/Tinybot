@@ -11,6 +11,7 @@
 //! Learning needs `intents.txt` to be rewritten and a training run, which belong on your own machine.
 
 use crate::bot::{Brain, Session};
+use crate::clock;
 use crate::cmds::{self, App};
 use crate::intents;
 use crate::model::Ensemble;
@@ -46,20 +47,34 @@ impl Web {
             return Err(InitError::IntentsMismatch);
         }
         let brain = Brain::new(model, intents);
-        let (mem_text, flow_text) = state.split_once(SEP).unwrap_or((state, ""));
+        let mut parts = state.split(SEP);
+        let (mem_text, flow_text, timer_text) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
         let mut s = Session::new(Memory::from_text(mem_text), false);
         s.flow_from_text(flow_text);
+        restore_timers(&mut s, timer_text);
         s.realtime = true;
         let mut app = App::new(brain, s);
         app.width = 60;
         Ok(Web { app })
     }
 
-    /// Everything worth keeping between visits, as text.
+    /// Everything worth keeping between visits, as text: memory, intent flow and running timers.
     pub fn state(&self) -> String {
         let s = &self.app.s;
-        let s_text = format!("{}{SEP}{}", s.mem.to_text(), s.flow_to_text());
+        let s_text = format!("{}{SEP}{}{SEP}{}", s.mem.to_text(), s.flow_to_text(), self.timers_text(false));
         if s_text.len() > MAX_STATE_BYTES { String::new() } else { s_text }
+    }
+
+    /// The running timers: JSON `[[deadline_unix_ms,label,total_ms],..]` for the page's countdown window, or one
+    /// `deadline_unix_ms total_ms label` line each for saving, so a timer survives a page change.
+    fn timers_text(&self, json: bool) -> String {
+        let (now_ms, now_us) = (clock::unix_ms(), clock::mono_us());
+        let items = self.app.s.timers.iter().map(|(due, label, total)| {
+            let deadline = now_ms + (due.saturating_sub(now_us) / 1000) as i64;
+            if json { format!("[{deadline},{},{}]", json_str(label), total / 1000) } else { format!("{deadline} {} {label}", total / 1000) }
+        });
+        let (sep, open, close) = if json { (",", "[", "]") } else { ("\n", "", "") };
+        format!("{open}{}{close}", items.collect::<Vec<_>>().join(sep))
     }
 
     /// Timers that have run out since the last call, as a JSON array of strings.
@@ -96,13 +111,14 @@ impl Web {
         let words = a.saliency.iter().take(24).filter(|(_, d)| d.is_finite()).map(|(w, d)| format!("[{},{d:.3}]", json_str(w))).collect::<Vec<_>>().join(",");
         let us = if a.micros.is_finite() { a.micros } else { 0.0 };
         format!(
-            "{{\"kind\":\"chat\",\"text\":{},\"tag\":{},\"conf\":{conf:.3},\"emo\":{},\"toasts\":{},\"done\":{},\"debug\":{},\"top\":[{top}],\"words\":[{words}],\"us\":{us:.0}}}",
+            "{{\"kind\":\"chat\",\"text\":{},\"tag\":{},\"conf\":{conf:.3},\"emo\":{},\"toasts\":{},\"done\":{},\"debug\":{},\"top\":[{top}],\"words\":[{words}],\"us\":{us:.0},\"timers\":{}}}",
             json_str(&r.text),
             json_str(&r.tag),
             json_str(r.emo),
             json_list(&r.toasts),
             r.done,
-            json_str(&debug)
+            json_str(&debug),
+            self.timers_text(true)
         )
     }
 
@@ -129,7 +145,23 @@ impl Web {
             }
             (out.lines, out.quit, name == "clear")
         };
-        format!("{{\"kind\":\"cmd\",\"lines\":{},\"quit\":{quit},\"clear\":{clear}}}", json_list(&lines))
+        format!("{{\"kind\":\"cmd\",\"lines\":{},\"quit\":{quit},\"clear\":{clear},\"timers\":{}}}", json_list(&lines), self.timers_text(true))
+    }
+}
+
+/// Put back the timers saved by `Web::state` ("deadline_unix_ms total_ms label" per line). One that ran out while the
+/// page was away rings on the first tick; one that ran out over an hour ago, or is not a sane timer, is dropped.
+fn restore_timers(s: &mut Session, text: &str) {
+    let (now_ms, now_us) = (clock::unix_ms(), clock::mono_us());
+    for line in text.lines().take(20) {
+        let mut it = line.splitn(3, ' ');
+        let (Some(Ok(due)), Some(Ok(total))) = (it.next().map(str::parse::<i64>), it.next().map(str::parse::<u64>)) else { continue };
+        let left = due.saturating_sub(now_ms);
+        if !(-3_600_000..=86_400_000).contains(&left) || total == 0 || total > 86_400_000 {
+            continue;
+        }
+        let label: String = it.next().unwrap_or("").chars().filter(|c| !c.is_control()).take(60).collect();
+        s.timers.push((now_us + left.max(0) as u64 * 1000, label, total * 1000));
     }
 }
 
@@ -337,6 +369,20 @@ mod tests {
         let t = w.tick();
         assert!(t.contains("Time's up"), "{t}");
         assert_eq!(w.tick(), "[]");
+    }
+
+    #[test]
+    fn timers_reach_the_page_and_survive_a_reload() {
+        let mut w = Web::new(bytes_cache(), "").unwrap();
+        let r = w.reply("set a timer for 90 seconds");
+        assert!(r.contains("\"timers\":[[") && r.contains(",90000]"), "{r}");
+        // a new page (a new instance) built from the saved state still has it
+        let mut w2 = Web::new(bytes_cache(), &w.state()).unwrap();
+        let r = w2.reply("/timers");
+        assert!(r.contains("\"timers\":[[") && r.contains(",90000]"), "{r}");
+        assert!(w2.reply("cancel my timer").contains("\"timers\":[]"));
+        // junk in the timer section is ignored
+        assert!(Web::new(bytes_cache(), "\u{1}\u{1}x y z\n9 9\n99999999999999999999 5 a").is_ok());
     }
 
     #[test]

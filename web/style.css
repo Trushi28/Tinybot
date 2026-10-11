@@ -186,3 +186,50 @@ button:disabled, input:disabled { opacity: .5; cursor: not-allowed; }
   .steps { grid-template-columns: 1fr; } .steps li + li { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
   #reset { display: none; }
 }
+
+/* ================= icons, chat page, timer window ================= */
+.ic { width: 17px; height: 17px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.top nav a { display: inline-flex; align-items: center; gap: 7px; }
+.icon { display: grid; place-items: center; padding: 0; }
+.icon .moon { display: none; }
+:root[data-theme="light"] .icon .sun { display: none; }
+:root[data-theme="light"] .icon .moon { display: block; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .icon .sun { display: none; }
+  :root:not([data-theme="dark"]) .icon .moon { display: block; }
+}
+form button { display: inline-grid; place-items: center; min-width: 46px; }
+form button .ic { width: 20px; height: 20px; stroke-width: 2.2; }
+
+/* landing: the console is a short preview, the dedicated page is the real thing */
+.console { height: clamp(430px, 58vh, 540px); }
+.hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.cta { display: inline-flex; align-items: center; gap: 9px; padding: 11px 20px; border-radius: 999px; text-decoration: none; font-weight: 700; background: var(--amber); color: var(--amber-ink); border: 1px solid var(--amber); transition: filter .15s; }
+.cta:hover { filter: brightness(1.1); }
+.cta.ghost { background: transparent; color: var(--ink); border-color: var(--line2); font-weight: 400; }
+.cta.ghost:hover { border-color: var(--amber); color: var(--amber); filter: none; }
+.open-chat { display: inline-flex; align-items: center; gap: 6px; color: var(--amber); text-decoration: none; font-size: 13px; }
+.open-chat:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+/* dedicated chat page */
+.chat .stage { margin: 0 auto; height: calc(100dvh - 76px); padding-bottom: 20px; max-width: 1240px; }
+.chat .console { height: 100%; }
+.chat .brain { overflow-y: auto; min-height: 0; }
+.chat .msg { font-size: 15.5px; }
+@media (max-width: 960px) { .chat .brain { display: none; } .chat .stage { height: calc(100dvh - 64px); } }
+
+/* timer window */
+.dock { position: fixed; right: 20px; top: 76px; z-index: 45; width: 232px; display: grid; gap: 12px; padding: 14px; background: var(--panel); border: 1px solid var(--line2); border-radius: var(--radius); box-shadow: 0 24px 60px -24px #000; animation: pop .22s ease-out both; }
+.dock[hidden] { display: none; }
+.trow { display: flex; align-items: center; gap: 12px; }
+.ring { width: 52px; height: 52px; flex: none; transform: rotate(-90deg); }
+.ring .track, .ring .arc { fill: none; stroke-width: 5; }
+.ring .track { stroke: var(--line2); }
+.ring .arc { stroke: var(--amber); stroke-linecap: round; transition: stroke-dashoffset .25s linear; }
+.tbody { min-width: 0; }
+.ttime { font: 400 28px/1 var(--serif); color: var(--amber); font-variant-numeric: tabular-nums; }
+.tlabel { margin-top: 4px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow.done .arc { stroke: var(--ok); }
+.trow.done .ttime { color: var(--ok); animation: blink 1s steps(2) 4; }
+@media (max-width: 1340px) { .dock { top: auto; bottom: 20px; } }
+@media (max-width: 560px) { .dock { top: 62px; bottom: auto; right: 12px; left: 12px; width: auto; } }
