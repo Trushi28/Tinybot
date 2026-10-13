@@ -148,19 +148,6 @@ What differs from the native app:
   code path natively.
 - Timers are announced live (the page polls once a second); native plain mode only reports them on your next message.
 
-## Deploy the web version
-
-`web/` is a plain static site, so any static host works. **Commit the built files** (`web/tinybot.wasm`, `web/bot.bin` and `web/models/`) and
-there is no build step on the host.
-
-| Host | Why pick it | Catch |
-|---|---|---|
-| **Vercel** (config included) | import the repo, framework "Other", no build command; `vercel.json` sets the `application/wasm` type and a strict content-security policy; a preview URL for every branch | free Hobby plan is for non-commercial use and has a monthly bandwidth cap |
-| **Cloudflare Pages** | unlimited bandwidth on the free plan, fast global network; the best choice if a post takes off | headers go in a `_headers` file instead of `vercel.json` |
-| **GitHub Pages** | zero extra accounts, lives next to the code | you cannot set response headers, so no content-security policy |
-| **Netlify** | similar to Vercel | headers go in `_headers` / `netlify.toml` |
-
-With Vercel: `vercel --prod` from the repo root, or connect the GitHub repo in the dashboard.
 
 ## Testing
 
