@@ -21,6 +21,8 @@ jobs:
       - name: JS glue tests
         run: node --test tests/glue.test.mjs tests/models.test.mjs
       - name: The wasm module builds and exports the expected functions
+        env:
+          RUSTFLAGS: -C link-arg=--import-undefined
         run: |
           cargo rustc --lib --release --target wasm32-unknown-unknown --crate-type cdylib
           node -e '
