@@ -695,3 +695,68 @@ fn taught_text_cannot_turn_into_file_syntax() {
     let (text, _) = b.answer(&mut s, b.tag_idx("taught_empty").unwrap(), "say nothing");
     assert!(text.contains("don't have a reply"), "{text}");
 }
+
+#[test]
+fn model_choice_parsing() {
+    use crate::cmds::parse_model_choice;
+    use crate::model::tier;
+    let cur = (Arch::Gru, tier("base").unwrap());
+    let ok = |s: &str| parse_model_choice(s, cur).map(|(a, t)| format!("{}-{}", a.name(), t.name));
+    assert_eq!(ok("cnn large").unwrap(), "cnn-large");
+    assert_eq!(ok("large cnn").unwrap(), "cnn-large");
+    assert_eq!(ok("GRU-XL").unwrap(), "gru-xl");
+    assert_eq!(ok("bow").unwrap(), "bow-base"); // a part you leave out keeps its current value
+    assert_eq!(ok("nano").unwrap(), "gru-nano");
+    assert!(ok("").is_err() && ok("   ").is_err() && ok("-").is_err());
+    assert!(ok("gru huge").is_err() && ok("lstm").is_err() && ok("../../etc/passwd").is_err());
+}
+
+#[test]
+fn switching_models_builds_saves_loads_and_swaps() {
+    use crate::cmds::App;
+    use crate::model::tier;
+    const TINY_CNN: Cfg = Cfg { arch: Arch::Cnn, dim: 8, hid: 16, bits: 10, ch: 4, epochs: 2 };
+    let cnn_app = |dir: &std::path::Path| {
+        let intents = intents::load();
+        let (tags, ex) = intents::flatten(&intents);
+        let t = Ensemble::train(&ex, tags, &[TINY], 1, 1.0, 0);
+        let brain = Brain::new(Ensemble::distill(&t, &ex, TINY_CNN, 1, 1.0, 0), intents);
+        let mut app = App::new(brain, Session::new(crate::skills::Memory::default(), false));
+        app.models_dir = dir.to_string_lossy().into_owned();
+        app
+    };
+    let dir = std::env::temp_dir().join(format!("tinybot-switch-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let nano = tier("nano").unwrap();
+    let mut app = cnn_app(&dir);
+    assert_eq!(app.current_choice(), (Arch::Cnn, nano));
+    assert!(app.start_switch(Arch::Cnn, nano)[0].contains("already running"));
+
+    // bow-nano is not on disk yet: it is built in the background, saved, and swapped in
+    let lines = app.start_switch(Arch::Bow, nano);
+    assert!(lines[0].contains("isn't built yet"), "{lines:?}");
+    assert!(app.retraining() && app.busy_label() == "switching model");
+    assert!(app.start_switch(Arch::Gru, nano)[0].contains("busy"), "a second request is refused, not queued");
+    let msg = app.wait_retrain().expect("switch finishes");
+    assert!(msg.contains("now running bow-nano"), "{msg}");
+    assert_eq!(app.current_choice(), (Arch::Bow, nano));
+    assert!(dir.join("bow-nano.bin").exists());
+    assert!(app.model_path.ends_with("bow-nano.bin"), "relearning must overwrite the model that is running");
+    assert!(!app.retraining());
+    let mut s = Session::new(crate::skills::Memory::default(), false);
+    assert!(app.brain.reply(&mut s, "what is 2+2").text.contains('4'));
+    let r = crate::cmds::run(&mut app, "/model");
+    assert!(r.lines.iter().any(|l| l.contains("[bow-nano]")), "{:?}", r.lines);
+
+    // a fresh session finds that file and loads it instead of building it again
+    let mut app2 = cnn_app(&dir);
+    let lines = app2.start_switch(Arch::Bow, nano);
+    assert!(lines[0].contains("loading"), "{lines:?}");
+    assert!(app2.wait_retrain().unwrap().contains("now running bow-nano"));
+
+    // the slash command reports bad input without switching
+    let r = crate::cmds::run(&mut app2, "/model nope");
+    assert!(r.lines[0].contains("don't know"), "{:?}", r.lines);
+    assert!(!app2.retraining());
+    let _ = std::fs::remove_dir_all(&dir);
+}

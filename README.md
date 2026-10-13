@@ -8,7 +8,7 @@ It has skills, a memory, moods and a face, and it runs in your browser as WebAss
 ![Rust 2024](https://img.shields.io/badge/Rust-2024_edition-e8590c?logo=rust&logoColor=white)
 ![Zero dependencies](https://img.shields.io/badge/dependencies-0-2f9e44)
 ![WebAssembly](https://img.shields.io/badge/runs_in-WebAssembly-654ff0?logo=webassembly&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-67_passing-2f9e44)
+![Tests](https://img.shields.io/badge/tests-73_passing-2f9e44)
 
 **[▶ Try it live](https://tinybot-self.vercel.app/)** &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Run it yourself](#quick-start) &nbsp;·&nbsp; [Deploy it](#deploy-the-web-version)
 
@@ -25,11 +25,11 @@ Type a message and a **live panel shows the network's top guesses and which word
 
 | | |
 |---|---|
-| **The brain** | a bidirectional GRU with **251k parameters**, a **316 KB** int8 file, about **40 µs** per message |
+| **The brain** | a bidirectional GRU with **251k parameters**, a **316 KB** int8 file, about **40 µs** per message. Switch to a bag-of-features net, a CNN or another size **live**, in the terminal and in the browser |
 | **How it got small** | a 3.2M-parameter teacher ensemble labels synthetic phrases; one student learns to match it (distillation) |
 | **What surrounds it** | exact skills (maths, units, dates, timers, notes), a 24-turn memory, a safety net that runs before the network |
-| **Where it runs** | a terminal UI with a live view into the net, a plain REPL, or **a browser tab** (WebAssembly, nothing leaves the page) |
-| **Quality bar** | 67 tests incl. finite-difference gradient checks, fuzzing, hostile-input and corrupt-model tests · clippy clean |
+| **Where it runs** | a terminal UI with a live view into the net, a plain REPL, or **a browser tab** (WebAssembly, a landing page plus a dedicated chat page, nothing leaves the page) |
+| **Quality bar** | 73 Rust tests + 20 for the browser glue, incl. finite-difference gradient checks, fuzzing, hostile-input and corrupt-model tests · clippy clean |
 | **Honest numbers** | about **81%** of unseen phrases routed correctly (5-fold CV), it declines instead of guessing when unsure, **7.7%** wrong answers at the default threshold |
 
 ## How it works
@@ -95,38 +95,63 @@ Windows Terminal should work but is untested (use `--plain` if anything misrende
 
 ## Run it in the browser
 
-The same engine compiles to a single WebAssembly module that a static page drives. Nothing the visitor types leaves
-their browser; notes and XP are kept in `localStorage`. The page shows the network's own view of every message: its
-top five intent probabilities, the words that mattered (leave-one-word-out influence) and the time the pass took.
+The same engine compiles to a single WebAssembly module that a static site drives. Nothing the visitor types leaves
+their browser; notes, XP and timers are kept in `localStorage`.
+
+**Two pages, one bot**
+
+| Page | What it is for |
+|---|---|
+| `index.html` | the landing page: what TinyBot is, the numbers, and a small **quick chat** card for a couple of messages. **Full chat ↗** opens the dedicated page and carries the conversation over |
+| `chat.html` | the dedicated chat: a roomy console on the left; on the right a **timer window** and a **live brain panel** (the animated face and mood, the network's top five intent probabilities, the words that mattered by leave-one-word-out influence, and the time the pass took) |
+
+**Timers get their own window.** Say `timer for 5 minutes` or `remind me in 10 minutes to stretch` and a small window opens on the
+right with a countdown ring per timer, a cancel button and a mute switch. It rings with a beep and a message, and running timers
+survive a page reload or a trip between the two pages, because they are part of the saved state. On a phone the window docks above the input.
+
+**Pick the brain.** The chat page has a **Model** card: choose the architecture (bow, cnn, gru) and the size (nano to large) and the
+engine swaps to it on the spot, with your conversation, notes, XP and timers untouched. Typing `/model gru large` or `/model cnn`
+does the same on either page, and your choice is remembered. Each model is fetched only when you pick it (100 KB to 470 KB) and kept
+for the rest of the visit. On a phone the card starts folded.
+
+**Theme and icons.** A sun/moon button switches light and dark (it follows your system by default and remembers your choice).
+All icons are inline SVG, so there is no icon font and no extra request.
 
 ```bash
 rustup target add wasm32-unknown-unknown
-./build-web.sh --serve         # builds web/tinybot.wasm + web/bot.bin, then serves http://localhost:8000
+./build-web.sh --serve         # builds web/tinybot.wasm, web/bot.bin and web/models/, then serves http://localhost:8000
 ```
+
+The model set is the slow step (one shared teacher builds every student: a few minutes on one core, much less on several). Use
+`./build-web.sh --skip-models` to keep the models you already have, or `TB_TIERS=nano,small,base ./build-web.sh` to ship fewer sizes (add `xl` to ship a 1M one, which is slow to build).
 
 How it is put together:
 
 | | |
 |---|---|
-| `src/web.rs` | a tiny C ABI (`tb_init`, `tb_reply`, `tb_state`, `tb_tick`) with JSON replies; plain Rust underneath, tested natively |
+| `src/web.rs` | a tiny C ABI (`tb_init`, `tb_reply`, `tb_state`, `tb_tick`, `tb_timers`, `tb_cancel_timer`, `tb_set_model`, `tb_model_info`) with JSON replies; plain Rust underneath, tested natively |
 | `src/clock.rs` | time, randomness and time zone behind one door: `std` natively, four host imports in the browser |
 | `web/tinybot.js` | the glue: instantiates the module, copies bytes in and out, saves state, restarts the module if it ever traps |
-| `web/` | the whole site: `index.html`, `style.css`, `app.js`, `tinybot.wasm`, `bot.bin` |
+| `web/chatcore.js` `web/brain.js` `web/timers.js` | shared page parts: the message log and input, the brain panel, the timer window |
+| `web/models.js` `web/models/` | the model picker and the `/model` command; `models/index.json` lists every model the page can switch to (`bot.bin` is the default, gru base) |
+| `web/face.js` `web/icons.js` `web/theme.js` | the animated face, the inline SVG icons, light/dark switching |
+| `web/app.js` `web/chat.js` | the landing page and the chat page |
+| `web/` | everything above plus `index.html`, `chat.html`, `style.css`, `tinybot.wasm`, `bot.bin`: the whole site, no build step on the host |
 
 What differs from the native app:
 
 - `/teach`, `/fix`, `/know`, `/unlearn` and `/retrain` are switched off: they rewrite files and retrain, which a browser
   tab cannot do. Teach it natively, rebuild, and ship the new `bot.bin`.
-- `bot.bin` must be trained on the same `intents.txt` the wasm was built from. `build-web.sh` guarantees that by training
-  in an empty directory; the app refuses to start on a mismatch and says why.
+- `bot.bin` and every file in `web/models/` must be trained on the same `intents.txt` the wasm was built from. `build-web.sh` guarantees
+  that by training in an empty directory; the app refuses to load a mismatched model and says why, and a Rust test checks every shipped file.
 - The clock, randomness and time zone come from the page. `cargo test --lib --features host-clock` runs that same
   code path natively.
 - Timers are announced live (the page polls once a second); native plain mode only reports them on your next message.
 
 ## Deploy the web version
 
-`web/` is a plain static site, so any static host works. **Commit the two built files** (`web/tinybot.wasm` and
-`web/bot.bin`) and there is no build step on the host.
+`web/` is a plain static site, so any static host works. **Commit the built files** (`web/tinybot.wasm`, `web/bot.bin` and `web/models/`) and
+there is no build step on the host.
 
 | Host | Why pick it | Catch |
 |---|---|---|
@@ -140,10 +165,10 @@ With Vercel: `vercel --prod` from the repo root, or connect the GitHub repo in t
 ## Testing
 
 ```bash
-cargo test --release                                 # 67 tests: skills, parsers, gradients, fuzzing, the web API
+cargo test --release                                 # 73 tests: skills, parsers, gradients, fuzzing, the web API
 cargo test --release --lib --features host-clock     # the same suite through the browser clock path
-node --test tests/glue.test.mjs                      # the JS glue against a stand-in module
-node tests/e2e.mjs                                   # the real .wasm + shipped model, after ./build-web.sh
+node --test tests/glue.test.mjs tests/models.test.mjs  # 20 tests: the JS glue against a stand-in module (timers, model swaps) and the model picker logic
+node tests/e2e.mjs                                   # the real .wasm, loading every shipped model in turn, after ./build-web.sh
 ```
 
 `.github/workflows/web.yml` runs all of it, and also checks that the built `.wasm` exports exactly the functions the page
@@ -195,7 +220,7 @@ expects and imports exactly the four host functions.
 ```
 /dex  /facts  /memory  /notes  /timers   what you've discovered, heard, told it
 /stats      level, XP, badges, model size and speed
-/model      which brain is running (architecture, size) and which others are built
+/model      which brain is running and which others are built; /model gru large, /model cnn, /model small switch live
 /confidence 0.7   how sure it must be to answer (higher = fewer mistakes, more questions)
 /history    its short-term memory of this chat
 /why        which words drove the last decision
@@ -226,6 +251,13 @@ Three architectures, all hand-written, six sizes each (`cargo run --release -- m
 | `max` | 4M | `bow-max` | `cnn-max` | `gru-max` |
 
 Nothing is prebuilt: each model is built the first time you ask for it, or all at once with `train --all`.
+
+**Switch without restarting.** In the terminal UI or the plain REPL, `/model` shows what is running and what is built, and
+`/model gru large`, `/model cnn` or `/model small` switches on the spot (a part you leave out keeps its current value). A model that
+is already on disk loads in a moment. One that is not is built on a background thread while you keep chatting (the header shows
+`switching model`), saved to `models/` for next time, and swapped in when it is ready. Models built this way use the quick
+bag-of-features teacher, so they are a little less accurate than ones from `tinybot train --all`; run that once for the best versions.
+In the browser the same thing is a picker, because the page cannot train: it switches between the models `build-web.sh` shipped.
 Each size is fitted so every architecture lands within 3% of the same parameter budget, so the comparison is fair.
 "Parameters" means allocated parameters (what the model costs in memory); the file on disk is smaller because
 only trained embedding rows are stored, as int8.
@@ -385,8 +417,9 @@ sanitised so input can't break the line-based formats. Nothing touches the netwo
 | `tui.rs` | the terminal UI: face canvas, particles, brain panel, console |
 | `cmds.rs` `train.rs` | slash commands · training pipeline, eval, benchmarks |
 | `lib.rs` `main.rs` | the engine as a library · the native command line over it |
-| `clock.rs` `web.rs` | time, randomness and time zone behind one door (native or page-provided) · the browser API (`tb_*` C ABI, JSON replies, state export) |
-| `tests.rs` + `seqnet.rs` + `web.rs` | 67 tests, including finite-difference gradient checks for the CNN and GRU: calculator edge cases and hostile nesting, conversions, dates, memory, notes, timers, facts, games, corrupt model files, the terminal UI's column widths, sulking, a fuzz run |
+| `clock.rs` `web.rs` | time, randomness and time zone behind one door (native or page-provided) · the browser API (`tb_*` C ABI, JSON replies, state and timer export) |
+| `web/*.js` `*.html` `style.css` | the browser site: landing page, chat page, timer window, brain panel (see [Run it in the browser](#run-it-in-the-browser)) |
+| `tests.rs` + `seqnet.rs` + `web.rs` | 73 tests, including finite-difference gradient checks for the CNN and GRU: calculator edge cases and hostile nesting, conversions, dates, memory, notes, timers, facts, games, corrupt model files, the terminal UI's column widths, sulking, a fuzz run |
 
 ```bash
 cargo test --release     # includes a 6,000-input fuzz run; trains several small models, about a minute

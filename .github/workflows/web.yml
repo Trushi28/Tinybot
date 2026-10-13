@@ -19,7 +19,7 @@ jobs:
       - name: Clippy
         run: cargo clippy --release --all-targets
       - name: JS glue tests
-        run: node --test tests/glue.test.mjs
+        run: node --test tests/glue.test.mjs tests/models.test.mjs
       - name: The wasm module builds and exports the expected functions
         run: |
           cargo rustc --lib --release --target wasm32-unknown-unknown --crate-type cdylib
@@ -28,7 +28,7 @@ jobs:
             const m = new WebAssembly.Module(fs.readFileSync("target/wasm32-unknown-unknown/release/tinybot.wasm"));
             const ex = WebAssembly.Module.exports(m).map(e => e.name);
             const imp = WebAssembly.Module.imports(m).map(i => i.module + "." + i.name).sort();
-            for (const n of ["memory","tb_alloc","tb_free","tb_init","tb_reply","tb_state","tb_tick","tb_result_ptr"]) if (!ex.includes(n)) throw new Error("missing export " + n);
+            for (const n of ["memory","tb_alloc","tb_free","tb_init","tb_reply","tb_state","tb_tick","tb_timers","tb_cancel_timer","tb_set_model","tb_model_info","tb_result_ptr"]) if (!ex.includes(n)) throw new Error("missing export " + n);
             const want = ["env.host_now_ms","env.host_perf_ms","env.host_random","env.host_tz_offset_min"];
             if (JSON.stringify(imp) !== JSON.stringify(want)) throw new Error("unexpected imports: " + imp);
             console.log("ok", ex.length, "exports,", imp.length, "imports");

@@ -67,6 +67,7 @@ impl Cfg {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Tier {
     pub name: &'static str,
     pub target: usize,

@@ -521,7 +521,7 @@ impl Ui {
         let hearts = "♥".repeat(p.hearts()) + &"♡".repeat(5 - p.hearts());
         let mut head = format!(" TinyBot ─ Lv {} {} ─ {}{} {a}/{b} XP ─ mood {label} ─ {hearts} ", p.level(), p.title(), "▓".repeat(bar_n), "░".repeat(10 - bar_n));
         if app.retraining() {
-            head.push_str(&format!("─ {} learning ", ["◜", "◝", "◞", "◟"][(self.frame / 2 % 4) as usize]));
+            head.push_str(&format!("─ {} {} ", ["◜", "◝", "◞", "◟"][(self.frame / 2 % 4) as usize], app.busy_label()));
         }
         if let Some((d, l)) = app.s.next_timer() {
             head.push_str(&format!("─ ⏱ {} {} ", fmt_dur(d.as_secs()), split_w(l, 12).0));

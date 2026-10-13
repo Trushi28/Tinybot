@@ -3,6 +3,7 @@
 
 use crate::bot::{Brain, Session};
 use crate::intents;
+use crate::model::{Arch, Ensemble, Tier, TIERS};
 use crate::train::{self, MODEL_PATH};
 use std::sync::mpsc;
 use std::time::Instant;
@@ -14,19 +15,80 @@ pub struct App {
     pub width: usize,
     retrain_rx: Option<mpsc::Receiver<(Brain, String)>>,
     retrain_again: bool,
+    /// set while a model switch (rather than a relearn) is running: the file the new brain will live in
+    pending_path: Option<String>,
     /// where the model lives on disk, so relearning overwrites the right file
     pub model_path: String,
+    /// where the non-default models live (`models/`); a field so tests can point it at a temp directory
+    pub models_dir: String,
 }
 
 impl App {
     pub fn new(brain: Brain, s: Session) -> App {
-        App { brain, s, width: 80, retrain_rx: None, retrain_again: false, model_path: MODEL_PATH.to_string() }
+        App { brain, s, width: 80, retrain_rx: None, retrain_again: false, pending_path: None, model_path: MODEL_PATH.to_string(), models_dir: "models".to_string() }
     }
 
     pub fn retraining(&self) -> bool {
         self.retrain_rx.is_some()
     }
 
+    /// What the background thread is doing, for the header spinner.
+    pub fn busy_label(&self) -> &'static str {
+        if self.pending_path.is_some() { "switching model" } else { "learning" }
+    }
+
+    /// The architecture and size tier of the brain that is answering right now.
+    pub fn current_choice(&self) -> (Arch, &'static Tier) {
+        (self.brain.model.cfg().arch, train::model_tier(&self.brain.model))
+    }
+
+    /// Switch to another architecture and size without restarting. A model that is already on disk (`bot.bin` for
+    /// the default, `models/<arch>-<size>.bin` for the rest) loads in a moment; one that is not is built on a
+    /// background thread and saved there for next time. Either way the chat keeps going and the new brain swaps in
+    /// when it is ready (`poll_retrain` reports it). Returns the lines to show now.
+    pub fn start_switch(&mut self, arch: Arch, tier: &'static Tier) -> Vec<String> {
+        let name = format!("{}-{}", arch.name(), tier.name);
+        let (ca, ct) = self.current_choice();
+        if self.retrain_rx.is_some() {
+            return vec!["I'm still busy learning or switching in the background. Try again in a moment.".into()];
+        }
+        if (ca, ct.name) == (arch, tier.name) {
+            return vec![format!("already running {name}")];
+        }
+        let o = train::Opts { arch, tier, ..train::Opts::default_opts() };
+        let path = if o.is_default() { MODEL_PATH.to_string() } else { format!("{}/{}.bin", self.models_dir, name) };
+        let built = std::path::Path::new(&path).exists();
+        let (tx, rx) = mpsc::channel();
+        let target = path.clone();
+        let done_name = name.clone();
+        std::thread::spawn(move || {
+            let t0 = Instant::now();
+            let intents = intents::load();
+            let m = match Ensemble::load(&target) {
+                Some(m) if train::model_is_current(&m, &intents, &o) => m,
+                _ => {
+                    let m = train::build_quiet(&intents, arch, tier);
+                    if let Some(dir) = std::path::Path::new(&target).parent() {
+                        let _ = std::fs::create_dir_all(dir);
+                    }
+                    let _ = m.save(&target);
+                    m
+                }
+            };
+            let msg = format!("now running {done_name} ({} params, {:.0} KB, ready in {:.1?})", train::params_label(&m), train::model_kb(&m), t0.elapsed());
+            let _ = tx.send((Brain::new(m, intents), msg));
+        });
+        self.retrain_rx = Some(rx);
+        self.pending_path = Some(path);
+        if built {
+            vec![format!("loading {name} ...")]
+        } else {
+            vec![
+                format!("{name} isn't built yet, so I'm building it in the background (a minute or two, longer for the big ones)."),
+                "Keep chatting: I'll switch when it's ready, and it's saved for next time.".into(),
+            ]
+        }
+    }
     /// Relearn from intents.txt + learned.txt on a background thread (~10-30 s on one core),
     /// so the UI keeps animating. A second request while one is running queues exactly one more.
     pub fn start_retrain(&mut self) {
@@ -55,11 +117,16 @@ impl App {
             Err(mpsc::TryRecvError::Disconnected) => None,
         };
         self.retrain_rx = None;
+        let switching = self.pending_path.take();
         let msg = match res {
             Some((b, msg)) => {
                 self.brain = b;
+                if let Some(p) = switching {
+                    self.model_path = p; // relearning now overwrites the file of the model that is actually running
+                }
                 msg
             }
+            None if switching.is_some() => "switching models failed, still on the old one".to_string(),
             None => "relearning failed".to_string(),
         };
         if std::mem::take(&mut self.retrain_again) {
@@ -101,7 +168,7 @@ pub const HELP: &[&str] = &[
     "/unlearn    undo the last thing I learned",
     "/emote <x>  make a face (try: love anger wow sleepy proud)",
     "/stats      level, XP, badges, model size and speed",
-    "/model      which brain I'm running (architecture and size)",
+    "/model      which brain I'm running; /model gru large (or cnn, bow, nano..max) switches live",
     "/history    my short-term memory of this chat",
     "/why        which words drove my last decision",
     "/fix <tag>  my last answer was wrong, it meant <tag>",
@@ -121,6 +188,23 @@ pub const HELP: &[&str] = &[
 fn bar(frac: f32, w: usize) -> String {
     let n = (frac.clamp(0.0, 1.0) * w as f32).round() as usize;
     format!("{}{}", "█".repeat(n), "░".repeat(w - n))
+}
+
+/// "gru large", "large gru", "gru-large", "cnn" or "small": a part you leave out keeps its current value.
+pub fn parse_model_choice(arg: &str, cur: (Arch, &'static Tier)) -> Result<(Arch, &'static Tier), String> {
+    let (mut arch, mut tier) = cur;
+    let mut any = false;
+    for w in arg.split(|c: char| c.is_whitespace() || matches!(c, '-' | '/' | ',' | '+')).filter(|w| !w.is_empty()) {
+        any = true;
+        if let Some(a) = Arch::parse(w) {
+            arch = a;
+        } else if let Some(t) = TIERS.iter().find(|t| t.name == w.to_lowercase()) {
+            tier = t;
+        } else {
+            return Err(format!("I don't know a model part called {w:?}."));
+        }
+    }
+    if any { Ok((arch, tier)) } else { Err("say which model, for example /model gru large.".into()) }
 }
 
 pub fn run(app: &mut App, line: &str) -> Out {
@@ -198,17 +282,29 @@ pub fn run(app: &mut App, line: &str) -> Out {
             }
             None => out(vec!["nothing to explain yet".into()]),
         },
+        "model" if !arg.is_empty() => {
+            let cur = app.current_choice();
+            match parse_model_choice(arg, cur) {
+                Ok((a, t)) => out(app.start_switch(a, t)),
+                Err(e) => out(vec![e, "try: /model gru large   /model cnn   /model small   (archs: bow cnn gru; sizes: nano small base large xl max)".into()]),
+            }
+        }
         "model" => {
             let c = brain.model.cfg();
+            let now = format!("{}-{}", c.arch.name(), train::model_tier(&brain.model).name);
+            let mut built: Vec<String> = std::fs::read_dir(&app.models_dir).map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().trim_end_matches(".bin").to_string()).collect()).unwrap_or_default();
+            if std::path::Path::new(MODEL_PATH).exists() && !built.iter().any(|b| b == "gru-base") {
+                built.push("gru-base".into());
+            }
+            built.sort();
+            let built = if built.is_empty() { "none yet".to_string() } else { built.iter().map(|b| if *b == now { format!("[{b}]") } else { b.clone() }).collect::<Vec<_>>().join(" ") };
             out(vec![
                 format!("{} ({})", train::model_name(&brain.model), c.tag()),
                 format!("{} params allocated, {} trained, {:.0} KB on disk", train::params_label(&brain.model), train::fmt_params(brain.model.param_report().2), train::model_kb(&brain.model)),
-                format!("available: {}", {
-                    let mut v: Vec<String> = std::fs::read_dir("models").map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().trim_end_matches(".bin").to_string()).collect()).unwrap_or_default();
-                    v.sort();
-                    if v.is_empty() { "none built yet (tinybot train --all)".to_string() } else { v.join(" ") }
-                }),
-                "switch with: tinybot --size base --arch gru   (sizes: nano small base large xl max, archs: bow cnn gru)".into(),
+                format!("built: {built}"),
+                "switch live with /model <arch> <size>, e.g. /model cnn small or /model large (one part keeps the other)".into(),
+                "archs: bow (fastest) cnn (word order) gru (order and negation); sizes: nano small base large xl max".into(),
+                "one that isn't built yet is built in the background the first time; `tinybot train --all` builds the best versions".into(),
             ])
         }
         "bench" => {

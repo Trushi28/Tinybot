@@ -44,7 +44,7 @@ export async function loadBot(opts = {}) {
   const storage = "storage" in opts ? opts.storage : safeStorage();
   const get = opts.fetchBytes || fetchBytes;
 
-  const [wasmBytes, model] = await Promise.all([get(wasmUrl), get(modelUrl)]);
+  let [wasmBytes, model] = await Promise.all([get(wasmUrl), get(modelUrl)]);
   const module = await WebAssembly.compile(wasmBytes);
 
   const env = {
@@ -56,6 +56,8 @@ export async function loadBot(opts = {}) {
 
   let ex = null;
   let saved = "";
+  // replies carry the running timers as [deadline_unix_ms, label, total_ms]; kept for a module that has no tb_timers
+  let replyTimers = [];
   try {
     saved = (storage && storage.getItem(key)) || "";
   } catch {}
@@ -77,6 +79,7 @@ export async function loadBot(opts = {}) {
 
   function start(state) {
     ex = new WebAssembly.Instance(module, { env }).exports;
+    replyTimers = [];
     const code = withBytes(model, (mp, ml) => withBytes(enc.encode(state), (sp, sl) => ex.tb_init(mp, ml, sp, sl)));
     if (code !== 0) throw new Error(INIT_ERRORS[code] || `tb_init failed (${code})`);
   }
@@ -111,6 +114,15 @@ export async function loadBot(opts = {}) {
     debug: "",
   };
 
+  // a module built before tb_timers existed still reports its timers in every reply: ask once so the list is current
+  if (!ex.tb_timers) {
+    try {
+      const n = withBytes(enc.encode("/timers"), (p, l) => ex.tb_reply(p, l));
+      const out = n ? JSON.parse(readResult(n)) : {};
+      if (Array.isArray(out.timers)) replyTimers = out.timers;
+    } catch {}
+  }
+
   return {
     /** Send one line. Always returns an object with a `kind` of "chat", "cmd" or "empty". */
     reply(text) {
@@ -119,6 +131,7 @@ export async function loadBot(opts = {}) {
         const n = withBytes(bytes, (p, l) => ex.tb_reply(p, l));
         if (n === 0) throw new Error("not initialised");
         const out = JSON.parse(readResult(n));
+        if (Array.isArray(out.timers)) replyTimers = out.timers;
         persist();
         return out;
       } catch (e) {
@@ -141,6 +154,78 @@ export async function loadBot(opts = {}) {
         return out;
       } catch {
         return [];
+      }
+    },
+
+    /** Save the state now (it is saved after every reply; call this after anything else that changes it). */
+    save() {
+      persist();
+    },
+
+    /** Running timers: [{ id, label, left_ms, total_ms }], soonest first. */
+    timers() {
+      try {
+        if (ex.tb_timers) return JSON.parse(readResult(ex.tb_timers()));
+        const now = Date.now();
+        return replyTimers
+          .filter(([due]) => due > now)
+          .map(([due, label, total]) => ({ id: due, label, left_ms: due - now, total_ms: total }))
+          .sort((a, b) => a.left_ms - b.left_ms);
+      } catch {
+        return [];
+      }
+    },
+
+    /** True when the module can cancel one timer (modules built before tb_cancel_timer cannot). */
+    get canCancel() {
+      return typeof ex.tb_cancel_timer === "function";
+    },
+
+    /** Cancel one timer by the id from timers(). Saves the new state. Returns true if it existed. */
+    cancelTimer(id) {
+      try {
+        const ok = ex.tb_cancel_timer ? ex.tb_cancel_timer(id) === 1 : false;
+        persist();
+        return ok;
+      } catch {
+        return false;
+      }
+    },
+
+    /** True when this module can swap models without restarting (modules built before tb_set_model cannot). */
+    get canSwitchModel() {
+      return typeof ex.tb_set_model === "function";
+    },
+
+    /**
+     * Swap in another model (another architecture or size). The conversation, notes, XP and timers all stay.
+     * Throws, and keeps the current model, if the bytes are not a model trained on this module's intents.
+     */
+    setModel(bytes) {
+      if (!ex.tb_set_model) throw new Error("This tinybot.wasm is too old to switch models. Run ./build-web.sh and redeploy.");
+      let code;
+      try {
+        code = withBytes(bytes, (p, l) => ex.tb_set_model(p, l));
+      } catch (e) {
+        // a trap leaves the module unusable: start again from the last good state with the model that was running
+        console.error("tinybot trapped while switching models, restarting", e);
+        try { start(saved); } catch { start(""); }
+        throw new Error("That model crashed the engine, so I went back to the one that was running.");
+      }
+      if (code !== 0) {
+        throw new Error(code === 2 ? INIT_ERRORS[2] : code === 1 ? "That file is not a valid TinyBot model." : `could not switch models (${code})`);
+      }
+      model = bytes; // a later restart after a trap must use this model, not the first one
+      persist();
+    },
+
+    /** The running model: { arch, tier, params, label, kb }, or null for a module without tb_model_info. */
+    modelInfo() {
+      try {
+        if (!ex.tb_model_info) return null;
+        return JSON.parse(readResult(ex.tb_model_info()));
+      } catch {
+        return null;
       }
     },
 

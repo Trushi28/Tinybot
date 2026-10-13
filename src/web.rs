@@ -39,14 +39,19 @@ pub enum InitError {
     IntentsMismatch = 2,
 }
 
+/// Parse model bytes and check they were trained on the intents built into this binary.
+fn load_brain(model: &[u8]) -> Result<Brain, InitError> {
+    let model = Ensemble::from_bytes(model).ok_or(InitError::BadModel)?;
+    let intents = intents::load_embedded();
+    if model.tags.len() != intents.len() || model.tags.iter().zip(&intents).any(|(t, i)| *t != i.tag) {
+        return Err(InitError::IntentsMismatch);
+    }
+    Ok(Brain::new(model, intents))
+}
+
 impl Web {
     pub fn new(model: &[u8], state: &str) -> Result<Web, InitError> {
-        let model = Ensemble::from_bytes(model).ok_or(InitError::BadModel)?;
-        let intents = intents::load_embedded();
-        if model.tags.len() != intents.len() || model.tags.iter().zip(&intents).any(|(t, i)| *t != i.tag) {
-            return Err(InitError::IntentsMismatch);
-        }
-        let brain = Brain::new(model, intents);
+        let brain = load_brain(model)?;
         let mut parts = state.split(SEP);
         let (mem_text, flow_text, timer_text) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
         let mut s = Session::new(Memory::from_text(mem_text), false);
@@ -56,6 +61,26 @@ impl Web {
         let mut app = App::new(brain, s);
         app.width = 60;
         Ok(Web { app })
+    }
+
+    /// Swap in another model (another architecture or size) without touching the conversation: notes, XP, mood, flow
+    /// and timers all stay. If the bytes are not a usable model the old one keeps running.
+    pub fn set_model(&mut self, model: &[u8]) -> Result<(), InitError> {
+        self.app.brain = load_brain(model)?;
+        Ok(())
+    }
+
+    /// The running model as JSON: `{"arch":"gru","tier":"base","params":251000,"label":"251k","kb":316}`.
+    pub fn model_info(&self) -> String {
+        let m = &self.app.brain.model;
+        format!(
+            "{{\"arch\":{},\"tier\":{},\"params\":{},\"label\":{},\"kb\":{:.0}}}",
+            json_str(m.cfg().arch.name()),
+            json_str(crate::train::model_tier(m).name),
+            m.nominal_params(),
+            json_str(&crate::train::params_label(m)),
+            crate::train::model_kb(m)
+        )
     }
 
     /// Everything worth keeping between visits, as text: memory, intent flow and running timers.
@@ -75,6 +100,26 @@ impl Web {
         });
         let (sep, open, close) = if json { (",", "[", "]") } else { ("\n", "", "") };
         format!("{open}{}{close}", items.collect::<Vec<_>>().join(sep))
+    }
+
+    /// Running timers as JSON `[{"id":..,"label":..,"left_ms":..,"total_ms":..}]`, soonest first. `id` is stable for the
+    /// life of the timer on this page, and is what `cancel_timer` takes.
+    pub fn timers(&self) -> String {
+        let now = clock::mono_us();
+        let mut v: Vec<&(u64, String, u64)> = self.app.s.timers.iter().collect();
+        v.sort_by_key(|(t, _, _)| *t);
+        let items: Vec<String> = v
+            .iter()
+            .map(|(t, l, total)| format!("{{\"id\":{t},\"label\":{},\"left_ms\":{},\"total_ms\":{}}}", json_str(l), t.saturating_sub(now) / 1000, total / 1000))
+            .collect();
+        format!("[{}]", items.join(","))
+    }
+
+    /// Cancel one timer by the `id` from `timers()`. Returns whether it existed.
+    pub fn cancel_timer(&mut self, id: u64) -> bool {
+        let n = self.app.s.timers.len();
+        self.app.s.timers.retain(|(t, _, _)| *t != id);
+        self.app.s.timers.len() != n
     }
 
     /// Timers that have run out since the last call, as a JSON array of strings.
@@ -133,6 +178,7 @@ impl Web {
                 vec![
                     format!("{} ({})", crate::train::model_name(m), m.cfg().tag()),
                     format!("{} params, {:.0} KB download", crate::train::params_label(m), crate::train::model_kb(m)),
+                    "switch with the model picker, or /model gru large (archs: bow cnn gru; sizes: nano small base large)".to_string(),
                     "running in your browser as WebAssembly; nothing you type leaves this page".to_string(),
                 ],
                 false,
@@ -271,6 +317,46 @@ mod exports {
         out.map(put).unwrap_or(0)
     }
 
+    /// Swap the model, keeping the conversation. Returns 0 on success, 1 if the bytes are not a model, 2 if the model
+    /// was trained on other intents, -1 if `tb_init` has not succeeded yet. On any failure the old model keeps running.
+    ///
+    /// # Safety
+    /// `model..model+len` must be memory returned by `tb_alloc`.
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn tb_set_model(model: *const u8, len: usize) -> i32 {
+        let bytes = unsafe { bytes(model, len) };
+        WEB.with(|c| match c.borrow_mut().as_mut() {
+            None => -1,
+            Some(w) => match w.set_model(bytes) {
+                Ok(()) => 0,
+                Err(e) => e as i32,
+            },
+        })
+    }
+
+    /// The running model as JSON (see `Web::model_info`); returns its length in the result buffer.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn tb_model_info() -> usize {
+        let out = WEB.with(|c| c.borrow().as_ref().map(|w| w.model_info()));
+        out.map(put).unwrap_or(0)
+    }
+
+    /// Running timers as JSON (see `Web::timers`); returns its length in the result buffer.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn tb_timers() -> usize {
+        let out = WEB.with(|c| c.borrow().as_ref().map(|w| w.timers()));
+        out.map(put).unwrap_or(0)
+    }
+
+    /// Cancel the timer with this id (ids stay below 2^53, so a JS number carries them exactly). Returns 1 or 0.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn tb_cancel_timer(id: f64) -> i32 {
+        if !(id.is_finite() && id >= 0.0) {
+            return 0;
+        }
+        WEB.with(|c| c.borrow_mut().as_mut().map(|w| w.cancel_timer(id as u64)).unwrap_or(false)) as i32
+    }
+
     /// Due timers as a JSON array; returns its length in the result buffer.
     #[unsafe(no_mangle)]
     pub extern "C" fn tb_tick() -> usize {
@@ -321,6 +407,10 @@ mod tests {
 
     #[test]
     fn chat_commands_and_blocked_commands() {
+        // a developer's checkout may already hold these files from native use, so compare before/after instead of
+        // asserting they do not exist
+        let snapshot = || (std::fs::read("learned.txt").ok(), std::fs::read("kb_user.txt").ok());
+        let before = snapshot();
         let mut w = Web::new(bytes_cache(), "").unwrap();
         assert_eq!(w.reply("   \u{7} "), "{\"kind\":\"empty\"}");
         let r = w.reply("what is 12*(3+4)");
@@ -338,8 +428,7 @@ mod tests {
         assert!(w.reply("/model").contains("WebAssembly"));
         assert!(w.reply("/stats").contains("level"));
         // nothing was written to disk by any of that
-        assert!(!std::path::Path::new("learned.txt").exists());
-        assert!(!std::path::Path::new("kb_user.txt").exists());
+        assert!(snapshot() == before, "the web build must not touch learned.txt or kb_user.txt");
     }
 
     #[test]
@@ -369,6 +458,59 @@ mod tests {
         let t = w.tick();
         assert!(t.contains("Time's up"), "{t}");
         assert_eq!(w.tick(), "[]");
+    }
+
+    #[test]
+    fn the_model_can_be_swapped_without_losing_the_conversation() {
+        // a different architecture and size, trained on the same intents
+        let other_cfg = Cfg { arch: Arch::Bow, dim: 12, hid: 24, bits: 11, ch: 0, epochs: 4 };
+        let intents = intents::load_embedded();
+        let (tags, ex) = intents::flatten(&intents);
+        let t = Ensemble::train(&ex, tags, &[TINY], 1, 1.0, 0);
+        let other = Ensemble::distill(&t, &ex, other_cfg, 1, 1.0, 0).to_bytes();
+
+        let mut w = Web::new(bytes_cache(), "").unwrap();
+        let before = w.model_info();
+        assert!(before.contains("\"arch\":\"bow\"") && before.contains("\"params\":"), "{before}");
+        w.reply("my name is Zara");
+        w.reply("remind me in 10 minutes to stretch");
+        assert!(w.set_model(&other).is_ok());
+        let after = w.model_info();
+        assert_ne!(before, after, "the new model is the one reporting");
+        // notes, name and timers survived, and it still answers
+        assert!(w.reply("what is my name").contains("Zara"));
+        assert!(w.timers().contains("stretch"));
+        assert!(w.reply("what is 12*(3+4)").contains("84"));
+
+        // anything that is not a model for these intents is refused and the current model keeps going
+        assert_eq!(w.set_model(b"nope"), Err(InitError::BadModel));
+        assert_eq!(w.set_model(&[]), Err(InitError::BadModel));
+        let ex2 = vec![(0usize, "hello".to_string()), (1, "bye".to_string())];
+        let t2 = Ensemble::train(&ex2, vec!["a".into(), "b".into()], &[TINY], 1, 1.0, 0);
+        assert_eq!(w.set_model(&t2.to_bytes()), Err(InitError::IntentsMismatch));
+        assert_eq!(w.model_info(), after);
+        assert!(w.reply("what is my name").contains("Zara"));
+    }
+
+    #[test]
+    fn timers_list_and_cancel() {
+        let mut w = Web::new(bytes_cache(), "").unwrap();
+        assert_eq!(w.timers(), "[]");
+        w.reply("remind me in 10 minutes to stretch");
+        w.reply("set a timer for 2 minutes");
+        let t = w.timers();
+        assert!(t.starts_with("[{\"id\":") && t.contains("\"left_ms\":") && t.contains("\"total_ms\":600000"), "{t}");
+        // soonest first: 2 minutes before 10 minutes
+        let first = t.find("\"label\":\"\"").expect(&t);
+        let second = t.find("stretch").expect(&t);
+        assert!(first < second, "{t}");
+        let id: u64 = t.split("\"id\":").nth(1).unwrap().split(',').next().unwrap().parse().unwrap();
+        assert!(w.cancel_timer(id));
+        assert!(!w.cancel_timer(id));
+        assert!(!w.timers().contains("\"label\":\"\""));
+        assert!(w.timers().contains("stretch"));
+        w.reply("cancel my timer");
+        assert_eq!(w.timers(), "[]");
     }
 
     #[test]
@@ -427,6 +569,51 @@ mod tests {
         }
     }
 
+    /// Every model the page can switch to (web/models/index.json) must be listed truthfully, load against the built-in
+    /// intents, and run on a stack as small as a wasm module's, including on hostile input. A stale or half-copied
+    /// model fails here rather than in a visitor's browser.
+    #[test]
+    fn shipped_models_match_the_manifest_and_the_intents() {
+        let Ok(manifest) = std::fs::read_to_string("web/models/index.json") else { return };
+        // one entry per line, written by build-web.sh: {"id":"bow-nano","arch":"bow","size":"nano","file":"models/bow-nano.bin","bytes":102266}
+        let field = |line: &str, key: &str| -> Option<String> {
+            let at = line.find(&format!("\"{key}\":"))? + key.len() + 3;
+            let rest = line[at..].trim_start_matches('"');
+            Some(rest.split(['"', ',', '}']).next()?.to_string())
+        };
+        let mut entries = Vec::new();
+        for line in manifest.lines().filter(|l| l.contains("\"id\":")) {
+            let line = line.trim_start_matches([',', ' ']);
+            entries.push((field(line, "id").unwrap(), field(line, "arch").unwrap(), field(line, "size").unwrap(), field(line, "file").unwrap(), field(line, "bytes").unwrap().parse::<usize>().unwrap()));
+        }
+        assert!(entries.len() >= 3, "the model picker needs a few models to choose from: run ./build-web.sh");
+        let mut archs = std::collections::BTreeSet::new();
+        for (id, arch, size, file, bytes) in entries {
+            assert_eq!(id, format!("{arch}-{size}"));
+            assert!(file == "bot.bin" || file == format!("models/{id}.bin"), "{file}");
+            let data = std::fs::read(format!("web/{file}")).unwrap_or_else(|_| panic!("{file} is listed in the manifest but missing"));
+            assert_eq!(data.len(), bytes, "{file}: the manifest is out of date, run ./build-web.sh");
+            let (arch2, size2, id2) = (arch.clone(), size.clone(), id.clone());
+            let h = std::thread::Builder::new()
+                .stack_size(512 * 1024)
+                .spawn(move || {
+                    let mut w = Web::new(&data, "").unwrap_or_else(|e| panic!("{id2} is stale ({e:?}): run ./build-web.sh"));
+                    let info = w.model_info();
+                    assert!(info.contains(&format!("\"arch\":\"{arch2}\"")) && info.contains(&format!("\"tier\":\"{size2}\"")), "{id2}: {info}");
+                    assert!(w.reply("what is 12*(3+4)").contains("84"), "{id2}");
+                    for q in ["hello", "tell me a joke", "thanks a lot"] {
+                        let r = w.reply(q);
+                        assert!(!r.contains("\"tag\":\"fallback\""), "{id2} {q}: {r}");
+                    }
+                    assert!(w.reply(&"x".repeat(4000)).starts_with('{'));
+                })
+                .unwrap();
+            h.join().unwrap_or_else(|_| panic!("{id} failed or overflowed a 512 KiB stack"));
+            archs.insert(arch);
+        }
+        assert_eq!(archs.len(), 3, "bow, cnn and gru should all be shipped: {archs:?}");
+    }
+
     /// The same conversation tests/e2e.mjs runs against the real wasm; here natively so a wrong expectation
     /// shows up in `cargo test` rather than in CI.
     #[test]
@@ -463,6 +650,10 @@ mod tests {
             assert_eq!(tb_reply(t, tl), 0);
             assert_eq!(tb_state(), 0);
             assert_eq!(tb_tick(), 0);
+            assert_eq!(tb_timers(), 0);
+            assert_eq!(tb_cancel_timer(1.0), 0);
+            assert_eq!(tb_model_info(), 0);
+            assert_eq!(tb_set_model(t, tl), -1);
             let (bad, bl) = put(b"nope");
             assert_eq!(tb_init(bad, bl, std::ptr::null(), 0), 1);
             tb_free(bad, bl);
@@ -485,6 +676,23 @@ mod tests {
             assert!(tb_reply(j, jl) > 0);
             tb_free(j, jl);
             assert_eq!(result(tb_tick()), "[]");
+            assert!(result(tb_model_info()).contains("\"arch\":\"bow\""));
+            let (mp2, ml2) = put(bytes_cache());
+            assert_eq!(tb_set_model(mp2, ml2), 0);
+            tb_free(mp2, ml2);
+            let (junk, jl) = put(b"not a model");
+            assert_eq!(tb_set_model(junk, jl), 1);
+            tb_free(junk, jl);
+            let (tq, tql) = put(b"set a timer for 5 minutes");
+            tb_reply(tq, tql);
+            tb_free(tq, tql);
+            let list = result(tb_timers());
+            assert!(list.contains("\"left_ms\":"), "{list}");
+            let id: f64 = list.split("\"id\":").nth(1).unwrap().split(',').next().unwrap().parse().unwrap();
+            assert_eq!(tb_cancel_timer(id), 1);
+            assert_eq!(tb_cancel_timer(-1.0), 0);
+            assert_eq!(tb_cancel_timer(f64::NAN), 0);
+            assert_eq!(result(tb_timers()), "[]");
             tb_free(t, tl);
         }
     }

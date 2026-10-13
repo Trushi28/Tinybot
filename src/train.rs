@@ -178,10 +178,21 @@ pub fn params_label(m: &Ensemble) -> String {
     fmt_params(m.nominal_params())
 }
 
+/// The size tier a model was built for: the one whose parameter target is nearest to its size.
+pub fn model_tier(m: &Ensemble) -> &'static Tier {
+    TIERS.iter().min_by_key(|t| (t.target as i64 - m.nominal_params() as i64).abs()).unwrap_or(&TIERS[0])
+}
+
 pub fn model_name(m: &Ensemble) -> String {
-    let c = m.cfg();
-    let t = TIERS.iter().min_by_key(|t| (t.target as i64 - m.nominal_params() as i64).abs()).map(|t| t.name).unwrap_or("custom");
-    format!("{} {}", c.arch.name(), t)
+    format!("{} {}", m.cfg().arch.name(), model_tier(m).name)
+}
+
+/// A model of any architecture and size, built on this thread without printing anything (the terminal UI calls it
+/// from a background thread). It uses the quick bag-of-features teacher, so it is a little less accurate than one
+/// from `tinybot train --all`, but it is calibrated the same way and finishes in a fraction of the time.
+pub fn build_quiet(intents: &[Intent], arch: Arch, tier: &Tier) -> Ensemble {
+    let cfg = student_cfg(arch, tier, intents.len());
+    build(intents, cfg, TeacherKind::Bow, true, false, false).1
 }
 
 fn teacher_list(kind: TeacherKind) -> Vec<Cfg> {

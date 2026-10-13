@@ -1,0 +1,14 @@
+{"default":"gru-base","models":[
+{"id":"gru-base","arch":"gru","size":"base","file":"bot.bin","bytes":323135},
+{"id":"bow-base","arch":"bow","size":"base","file":"models/bow-base.bin","bytes":301582},
+{"id":"bow-large","arch":"bow","size":"large","file":"models/bow-large.bin","bytes":466316},
+{"id":"bow-nano","arch":"bow","size":"nano","file":"models/bow-nano.bin","bytes":102266},
+{"id":"bow-small","arch":"bow","size":"small","file":"models/bow-small.bin","bytes":138239},
+{"id":"cnn-base","arch":"cnn","size":"base","file":"models/cnn-base.bin","bytes":305494},
+{"id":"cnn-large","arch":"cnn","size":"large","file":"models/cnn-large.bin","bytes":384298},
+{"id":"cnn-nano","arch":"cnn","size":"nano","file":"models/cnn-nano.bin","bytes":114090},
+{"id":"cnn-small","arch":"cnn","size":"small","file":"models/cnn-small.bin","bytes":162014},
+{"id":"gru-large","arch":"gru","size":"large","file":"models/gru-large.bin","bytes":404990},
+{"id":"gru-nano","arch":"gru","size":"nano","file":"models/gru-nano.bin","bytes":116766},
+{"id":"gru-small","arch":"gru","size":"small","file":"models/gru-small.bin","bytes":171934}
+]}
