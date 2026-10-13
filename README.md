@@ -269,26 +269,22 @@ cargo run --release -- speed                        # training cost per step for
 
 ### What the measurements say
 
-Same data, same teacher, same folds. Clean accuracy, 2 folds (0 and 3), 347 held-out phrases, so about ±2 points of
-noise. Every student is distilled from the same teacher (3 bag-of-features nets + 1 CNN + 1 GRU, 78.4% clean).
+Same data, same teacher, same folds. Clean accuracy, 2 folds (0 and 3), 408 held-out phrases, so about ±2 points of
+noise. Every student is distilled from the same teacher (3 bag-of-features nets + 1 CNN + 1 GRU, 82.4% clean).
 
 | Size | Bag-of-features | CNN | GRU |
 |---|---:|---:|---:|
-| 68k | 75.8% | 72.9% | **77.2%** |
-| 100k | 75.2% | 74.9% | **77.2%** |
-| 250k | 74.9% | 75.5% | **78.4%** |
-| 500k | 77.8% | 76.4% | **79.0%** |
-| 1M | 78.1% | **79.0%** | 78.7% |
-| 4M | 79.3% | not measured | not measured |
+| 68k | 77.5% | 77.2% | **78.7%** |
+| 100k | **80.4%** | 79.4% | 79.2% |
+| 250k | 79.7% | **80.9%** | 80.6% |
+| 500k | 80.9% | 79.7% | **81.6%** |
+| 1M | 80.1% | 80.9% | **81.1%** |
+| 4M | 81.1% | 80.6% | **82.6%** |
 
-- **The GRU wins at small and medium sizes**, and at 68k a GRU already matches the 5-net bag-of-features teacher
-  (78.7%). That's why a 250k GRU is the default.
+- **No architecture wins clearly**. The GRU is nominally ahead at 68k, 500k, 1M and 4M, but by about a point.
 - **The CNN never clearly beats the bag-of-features net.**
-- **Going from 250k to 4M adds about 1 point, which is inside the noise.** With about a thousand training
-  phrases the data is the ceiling, not the model. Bigger models mostly buy typo robustness (60.8% at 68k vs 68.9% at 4M for
-  the bag-of-features net), not accuracy.
-- The 4M CNN and GRU were not benchmarked: the sweep process was killed partway through in my sandbox, and I
-  didn't rerun those two rows. `sweep --archs cnn,gru --tiers max` will measure them if you have the cores.
+- **0 to 2 points, inside the noise.** With about a thousand training
+  phrases the data is the ceiling, not the model.
 
 ## How it works in detail
 
