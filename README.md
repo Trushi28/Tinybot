@@ -90,8 +90,7 @@ Pick another brain with `--size` and `--arch`, for example `cargo run --release 
 See [Model sizes](#model-sizes-and-architectures).
 
 You need a terminal with 256-colour support and at least 84×30. Resize before launching; the layout is
-fixed at start. I tested on Linux through a pseudo-terminal; macOS terminals should behave the same, and
-Windows Terminal should work but is untested (use `--plain` if anything misrenders).
+fixed at start.
 
 ## Run it in the browser
 
