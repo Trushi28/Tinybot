@@ -57,13 +57,22 @@ struct Ui {
 fn term_size() -> (usize, usize) {
     let from_stty = || {
         let tty = std::fs::File::open("/dev/tty").ok()?;
-        let o = Command::new("stty").arg("size").stdin(Stdio::from(tty)).output().ok()?;
+        let o = Command::new("stty")
+            .arg("size")
+            .stdin(Stdio::from(tty))
+            .output()
+            .ok()?;
         let s = String::from_utf8_lossy(&o.stdout).to_string();
         let mut it = s.split_whitespace().map(|x| x.parse::<usize>().ok());
         Some((it.next()??, it.next()??))
     };
     let (rows, cols) = from_stty().unwrap_or_else(|| {
-        let e = |k: &str, d: usize| std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+        let e = |k: &str, d: usize| {
+            std::env::var(k)
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(d)
+        };
         (e("LINES", 36), e("COLUMNS", 112))
     });
     (cols.clamp(84, 150), rows.clamp(30, 60))
@@ -113,23 +122,102 @@ fn hash32(a: u32, b: u32) -> u32 {
 fn cw(c: char) -> usize {
     let u = c as u32;
     const ZERO: &[(u32, u32)] = &[
-        (0x0000, 0x001F), (0x007F, 0x009F), (0x0300, 0x036F), (0x0483, 0x0489), (0x0591, 0x05BD), (0x0610, 0x061A), (0x064B, 0x065F), (0x0E31, 0x0E31), (0x0E34, 0x0E3A),
-        (0x0E47, 0x0E4E), (0x1AB0, 0x1AFF), (0x1DC0, 0x1DFF), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x2064), (0x20D0, 0x20FF), (0xFE00, 0xFE0F), (0xFE20, 0xFE2F),
-        (0x1F3FB, 0x1F3FF), (0xE0100, 0xE01EF),
+        (0x0000, 0x001F),
+        (0x007F, 0x009F),
+        (0x0300, 0x036F),
+        (0x0483, 0x0489),
+        (0x0591, 0x05BD),
+        (0x0610, 0x061A),
+        (0x064B, 0x065F),
+        (0x0E31, 0x0E31),
+        (0x0E34, 0x0E3A),
+        (0x0E47, 0x0E4E),
+        (0x1AB0, 0x1AFF),
+        (0x1DC0, 0x1DFF),
+        (0x200B, 0x200F),
+        (0x202A, 0x202E),
+        (0x2060, 0x2064),
+        (0x20D0, 0x20FF),
+        (0xFE00, 0xFE0F),
+        (0xFE20, 0xFE2F),
+        (0x1F3FB, 0x1F3FF),
+        (0xE0100, 0xE01EF),
     ];
     const WIDE: &[(u32, u32)] = &[
-        (0x1100, 0x115F), (0x231A, 0x231B), (0x23E9, 0x23EC), (0x23F0, 0x23F0), (0x23F3, 0x23F3), (0x25FD, 0x25FE), (0x2614, 0x2615), (0x2648, 0x2653), (0x267F, 0x267F),
-        (0x2693, 0x2693), (0x26A1, 0x26A1), (0x26AA, 0x26AB), (0x26BD, 0x26BE), (0x26C4, 0x26C5), (0x26CE, 0x26CE), (0x26D4, 0x26D4), (0x26EA, 0x26EA), (0x26F2, 0x26F3),
-        (0x26F5, 0x26F5), (0x26FA, 0x26FA), (0x26FD, 0x26FD), (0x2705, 0x2705), (0x270A, 0x270B), (0x2728, 0x2728), (0x274C, 0x274C), (0x274E, 0x274E), (0x2753, 0x2755),
-        (0x2757, 0x2757), (0x2795, 0x2797), (0x27B0, 0x27B0), (0x27BF, 0x27BF), (0x2B1B, 0x2B1C), (0x2B50, 0x2B50), (0x2B55, 0x2B55), (0x2E80, 0x303E), (0x3041, 0x33FF),
-        (0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xA000, 0xA4CF), (0xA960, 0xA97F), (0xAC00, 0xD7A3), (0xF900, 0xFAFF), (0xFE10, 0xFE19), (0xFE30, 0xFE6F), (0xFF00, 0xFF60),
-        (0xFFE0, 0xFFE6), (0x16FE0, 0x16FE4), (0x17000, 0x18CFF), (0x1B000, 0x1B2FF), (0x1F004, 0x1F004), (0x1F0CF, 0x1F0CF), (0x1F18E, 0x1F18E), (0x1F191, 0x1F19A),
-        (0x1F200, 0x1F265), (0x1F300, 0x1F64F), (0x1F680, 0x1F6C5), (0x1F6CC, 0x1F6CC), (0x1F6D0, 0x1F6D2), (0x1F6D5, 0x1F6D7), (0x1F6EB, 0x1F6EC), (0x1F6F4, 0x1F6FC),
-        (0x1F7E0, 0x1F7EB), (0x1F90C, 0x1F9FF), (0x1FA70, 0x1FAFF), (0x20000, 0x2FFFD), (0x30000, 0x3FFFD),
+        (0x1100, 0x115F),
+        (0x231A, 0x231B),
+        (0x23E9, 0x23EC),
+        (0x23F0, 0x23F0),
+        (0x23F3, 0x23F3),
+        (0x25FD, 0x25FE),
+        (0x2614, 0x2615),
+        (0x2648, 0x2653),
+        (0x267F, 0x267F),
+        (0x2693, 0x2693),
+        (0x26A1, 0x26A1),
+        (0x26AA, 0x26AB),
+        (0x26BD, 0x26BE),
+        (0x26C4, 0x26C5),
+        (0x26CE, 0x26CE),
+        (0x26D4, 0x26D4),
+        (0x26EA, 0x26EA),
+        (0x26F2, 0x26F3),
+        (0x26F5, 0x26F5),
+        (0x26FA, 0x26FA),
+        (0x26FD, 0x26FD),
+        (0x2705, 0x2705),
+        (0x270A, 0x270B),
+        (0x2728, 0x2728),
+        (0x274C, 0x274C),
+        (0x274E, 0x274E),
+        (0x2753, 0x2755),
+        (0x2757, 0x2757),
+        (0x2795, 0x2797),
+        (0x27B0, 0x27B0),
+        (0x27BF, 0x27BF),
+        (0x2B1B, 0x2B1C),
+        (0x2B50, 0x2B50),
+        (0x2B55, 0x2B55),
+        (0x2E80, 0x303E),
+        (0x3041, 0x33FF),
+        (0x3400, 0x4DBF),
+        (0x4E00, 0x9FFF),
+        (0xA000, 0xA4CF),
+        (0xA960, 0xA97F),
+        (0xAC00, 0xD7A3),
+        (0xF900, 0xFAFF),
+        (0xFE10, 0xFE19),
+        (0xFE30, 0xFE6F),
+        (0xFF00, 0xFF60),
+        (0xFFE0, 0xFFE6),
+        (0x16FE0, 0x16FE4),
+        (0x17000, 0x18CFF),
+        (0x1B000, 0x1B2FF),
+        (0x1F004, 0x1F004),
+        (0x1F0CF, 0x1F0CF),
+        (0x1F18E, 0x1F18E),
+        (0x1F191, 0x1F19A),
+        (0x1F200, 0x1F265),
+        (0x1F300, 0x1F64F),
+        (0x1F680, 0x1F6C5),
+        (0x1F6CC, 0x1F6CC),
+        (0x1F6D0, 0x1F6D2),
+        (0x1F6D5, 0x1F6D7),
+        (0x1F6EB, 0x1F6EC),
+        (0x1F6F4, 0x1F6FC),
+        (0x1F7E0, 0x1F7EB),
+        (0x1F90C, 0x1F9FF),
+        (0x1FA70, 0x1FAFF),
+        (0x20000, 0x2FFFD),
+        (0x30000, 0x3FFFD),
     ];
     let hit = |t: &[(u32, u32)]| t.iter().any(|&(a, b)| (a..=b).contains(&u));
     if u < 0x300 {
-        return if u < 0x20 || (0x7F..=0x9F).contains(&u) { 0 } else { 1 };
+        return if u < 0x20 || (0x7F..=0x9F).contains(&u) {
+            0
+        } else {
+            1
+        };
     }
     if hit(ZERO) {
         0
@@ -188,7 +276,10 @@ struct Row {
 
 impl Row {
     fn new() -> Row {
-        Row { s: String::new(), w: 0 }
+        Row {
+            s: String::new(),
+            w: 0,
+        }
     }
     fn plain(mut self, t: &str) -> Row {
         self.w += text_w(t);
@@ -259,7 +350,11 @@ struct Canvas {
 
 impl Canvas {
     fn new(w: usize, h: usize) -> Canvas {
-        Canvas { w, ch: vec![vec![' '; w]; h], co: vec![vec![0; w]; h] }
+        Canvas {
+            w,
+            ch: vec![vec![' '; w]; h],
+            co: vec![vec![0; w]; h],
+        }
     }
     fn put(&mut self, x: i32, y: i32, c: char, col: u8, only_blank: bool) {
         if x < 0 || y < 0 || y as usize >= self.ch.len() || x as usize >= self.w {
@@ -281,7 +376,13 @@ impl Canvas {
         let mut r = Row::new();
         let (mut run, mut cur) = (String::new(), 0u8);
         let flush = |r: Row, run: &mut String, cur: u8| -> Row {
-            let out = if run.is_empty() { r } else if cur == 0 { r.plain(run) } else { r.styled(cur, run) };
+            let out = if run.is_empty() {
+                r
+            } else if cur == 0 {
+                r.plain(run)
+            } else {
+                r.styled(cur, run)
+            };
             run.clear();
             out
         };
@@ -307,19 +408,39 @@ struct Spec {
 }
 
 pub const EMOTIONS: [&str; 18] = [
-    "neutral", "joy", "ecstatic", "love", "laugh", "anger", "grumpy", "sad", "concern", "wow", "confused", "curious", "think", "sleepy", "asleep",
-    "proud", "wink", "sulk",
+    "neutral", "joy", "ecstatic", "love", "laugh", "anger", "grumpy", "sad", "concern", "wow",
+    "confused", "curious", "think", "sleepy", "asleep", "proud", "wink", "sulk",
 ];
 
 fn spec(emo: &str, t: u32, talking: bool) -> Spec {
     let tf = t as usize;
-    let s = |el, er, bl, br, mouth: &str, col, cheeks| Spec { el, er, bl, br, mouth: mouth.to_string(), col, cheeks };
+    let s = |el, er, bl, br, mouth: &str, col, cheeks| Spec {
+        el,
+        er,
+        bl,
+        br,
+        mouth: mouth.to_string(),
+        col,
+        cheeks,
+    };
     let spin = ['◔', '◑', '◕', '◒'][tf / 2 % 4];
     let mut sp = match emo {
         "joy" => s('◠', '◠', ' ', ' ', " ╰───╯ ", Some(120), true),
         "ecstatic" => s('★', '★', ' ', ' ', " \\___/ ", Some(213), true),
         "love" => s('♥', '♥', ' ', ' ', " ╰───╯ ", Some(204), true),
-        "laugh" => s('^', '^', ' ', ' ', if (tf / 2).is_multiple_of(2) { " \\___/ " } else { " \\_o_/ " }, Some(120), true),
+        "laugh" => s(
+            '^',
+            '^',
+            ' ',
+            ' ',
+            if (tf / 2).is_multiple_of(2) {
+                " \\___/ "
+            } else {
+                " \\_o_/ "
+            },
+            Some(120),
+            true,
+        ),
         "anger" => s('●', '●', '\\', '/', "  ▔▔▔  ", Some(196), false),
         "grumpy" => s('▬', '▬', '\\', '/', "  ▔▔▔  ", Some(208), false),
         "sad" => s('╥', '╥', '/', '\\', " ╭───╮ ", Some(105), false),
@@ -327,8 +448,28 @@ fn spec(emo: &str, t: u32, talking: bool) -> Spec {
         "wow" => s('O', 'O', '‾', '‾', "   O   ", Some(226), false),
         "confused" => s('o', 'O', ' ', '/', "  ─?─  ", Some(220), false),
         "curious" => s('●', '◉', ' ', '‾', "  ─⌒─  ", Some(117), false),
-        "think" => s(spin, spin, ' ', ' ', ["  ·    ", "  · ·  ", "  · · ·", "       "][tf / 3 % 4], Some(45), false),
-        "sleepy" => s('─', '─', ' ', ' ', if (tf / 6).is_multiple_of(2) { "  ─o─  " } else { "  ───  " }, Some(244), false),
+        "think" => s(
+            spin,
+            spin,
+            ' ',
+            ' ',
+            ["  ·    ", "  · ·  ", "  · · ·", "       "][tf / 3 % 4],
+            Some(45),
+            false,
+        ),
+        "sleepy" => s(
+            '─',
+            '─',
+            ' ',
+            ' ',
+            if (tf / 6).is_multiple_of(2) {
+                "  ─o─  "
+            } else {
+                "  ───  "
+            },
+            Some(244),
+            false,
+        ),
         "asleep" => s('─', '─', ' ', ' ', "  ─ ─  ", Some(240), false),
         "proud" => s('◠', '◠', ' ', ' ', " ╰───╯ ", Some(220), true),
         "wink" => s('●', '─', ' ', ' ', " ╰───╯ ", Some(159), false),
@@ -348,7 +489,13 @@ fn fx(cv: &mut Canvas, emo: &str, t: u32) {
             for i in 0..3i32 {
                 let ph = (ti / 3 + i * 3) % 7;
                 let sway = [0, 1, 0, -1][((ti / 2 + i) % 4) as usize];
-                cv.put([7, 26, 30][i as usize] + sway, 6 - ph, '♥', [204, 197, 211][i as usize], true);
+                cv.put(
+                    [7, 26, 30][i as usize] + sway,
+                    6 - ph,
+                    '♥',
+                    [204, 197, 211][i as usize],
+                    true,
+                );
             }
         }
         "sad" | "concern" => {
@@ -403,7 +550,13 @@ fn fx(cv: &mut Canvas, emo: &str, t: u32) {
             for i in 0..n {
                 let h = hash32(i, t / 3);
                 let (x, y) = (2 + (h % 30) as i32, ((h >> 8) % 7) as i32);
-                cv.put(x, y, ['✦', '✧', '·', '*'][((h >> 16) % 4) as usize], [220, 213, 159, 229][((h >> 20) % 4) as usize], true);
+                cv.put(
+                    x,
+                    y,
+                    ['✦', '✧', '·', '*'][((h >> 16) % 4) as usize],
+                    [220, 213, 159, 229][((h >> 20) % 4) as usize],
+                    true,
+                );
             }
         }
         "sulk" => {
@@ -423,7 +576,11 @@ fn draw_face(emo: &str, t: u32, base: u8, talking: bool, look: i32, label: &str)
     let col = sp.col.unwrap_or(base);
     let x0 = 10;
     if emo != "sulk" {
-        let a = if t.is_multiple_of(17) || (emo == "think" && t % 4 < 2) { '✦' } else { '·' };
+        let a = if t.is_multiple_of(17) || (emo == "think" && t % 4 < 2) {
+            '✦'
+        } else {
+            '·'
+        };
         cv.put(16, 0, a, col, false);
         cv.put(16, 1, '│', col, false);
     }
@@ -433,7 +590,11 @@ fn draw_face(emo: &str, t: u32, base: u8, talking: bool, look: i32, label: &str)
     }
     cv.text(x0, 6, "╰───────────╯", col);
     let blink = t.is_multiple_of(31) && !matches!(emo, "sleepy" | "asleep" | "wink");
-    let shift = if matches!(emo, "neutral" | "joy") { look } else { 0 };
+    let shift = if matches!(emo, "neutral" | "joy") {
+        look
+    } else {
+        0
+    };
     let eye = |c: char| if blink && c != ' ' { '─' } else { c };
     cv.put(13 + shift, 4, eye(sp.el), col, false);
     cv.put(19 + shift, 4, eye(sp.er), col, false);
@@ -484,7 +645,12 @@ impl Ui {
             return vec![];
         }
         let title = format!("─ CONSOLE · {} ", self.con_title);
-        let mut out = vec![Row::new().styled(240, &title).styled(240, &"─".repeat(rw.saturating_sub(text_w(&title)))).pad(rw)];
+        let mut out = vec![
+            Row::new()
+                .styled(240, &title)
+                .styled(240, &"─".repeat(rw.saturating_sub(text_w(&title))))
+                .pad(rw),
+        ];
         let mut body: Vec<String> = Vec::new();
         for l in &self.console {
             if l.is_empty() {
@@ -499,7 +665,17 @@ impl Ui {
             out.push(Row::new().styled(250, l).pad(rw));
         }
         if hidden {
-            out.push(Row::new().styled(240, &format!("… {} more line(s), enlarge the window or /clear", body.len() - shown)).pad(rw));
+            out.push(
+                Row::new()
+                    .styled(
+                        240,
+                        &format!(
+                            "… {} more line(s), enlarge the window or /clear",
+                            body.len() - shown
+                        ),
+                    )
+                    .pad(rw),
+            );
         }
         out
     }
@@ -519,17 +695,43 @@ impl Ui {
         let (a, b) = p.progress();
         let bar_n = ((a as f32 / b as f32) * 10.0).round() as usize;
         let hearts = "♥".repeat(p.hearts()) + &"♡".repeat(5 - p.hearts());
-        let mut head = format!(" TinyBot ─ Lv {} {} ─ {}{} {a}/{b} XP ─ mood {label} ─ {hearts} ", p.level(), p.title(), "▓".repeat(bar_n), "░".repeat(10 - bar_n));
+        let mut head = format!(
+            " TinyBot ─ Lv {} {} ─ {}{} {a}/{b} XP ─ mood {label} ─ {hearts} ",
+            p.level(),
+            p.title(),
+            "▓".repeat(bar_n),
+            "░".repeat(10 - bar_n)
+        );
         if app.retraining() {
-            head.push_str(&format!("─ {} {} ", ["◜", "◝", "◞", "◟"][(self.frame / 2 % 4) as usize], app.busy_label()));
+            head.push_str(&format!(
+                "─ {} {} ",
+                ["◜", "◝", "◞", "◟"][(self.frame / 2 % 4) as usize],
+                app.busy_label()
+            ));
         }
         if let Some((d, l)) = app.s.next_timer() {
-            head.push_str(&format!("─ ⏱ {} {} ", fmt_dur(d.as_secs()), split_w(l, 12).0));
+            head.push_str(&format!(
+                "─ ⏱ {} {} ",
+                fmt_dur(d.as_secs()),
+                split_w(l, 12).0
+            ));
         }
         let head_w = text_w(&head);
-        let hc = if self.flash > 0 && self.frame.is_multiple_of(2) { 229 } else { 208 };
+        let hc = if self.flash > 0 && self.frame.is_multiple_of(2) {
+            229
+        } else {
+            208
+        };
         let mut out = String::new();
-        out.push_str(&format!("\x1b[H{}\x1b[K\n", fg(240, "╭") + &fg(hc, &head) + &fg(240, &format!("{}╮", "─".repeat(w.saturating_sub(head_w + 2))))));
+        out.push_str(&format!(
+            "\x1b[H{}\x1b[K\n",
+            fg(240, "╭")
+                + &fg(hc, &head)
+                + &fg(
+                    240,
+                    &format!("{}╮", "─".repeat(w.saturating_sub(head_w + 2)))
+                )
+        ));
 
         // ---- left panel ----
         let emo = self.emotion(app);
@@ -539,11 +741,23 @@ impl Ui {
             _ => 0,
         };
         let mut left: Vec<String> = Vec::new();
-        for r in draw_face(emo, self.frame, mood_colour(label), self.talking, look, &format!("{label} · {}", p.title())) {
+        for r in draw_face(
+            emo,
+            self.frame,
+            mood_colour(label),
+            self.talking,
+            look,
+            &format!("{label} · {}", p.title()),
+        ) {
             left.push(r.pad(LW));
         }
         left.push(" ".repeat(LW));
-        left.push(Row::new().styled(240, "─ BRAIN ").styled(240, &"─".repeat(LW - 8)).pad(LW));
+        left.push(
+            Row::new()
+                .styled(240, "─ BRAIN ")
+                .styled(240, &"─".repeat(LW - 8))
+                .pad(LW),
+        );
         if let Some(an) = &self.analysis {
             let probs = self.shown.as_ref().unwrap_or(&an.probs);
             let mut idx: Vec<usize> = (0..probs.len()).collect();
@@ -552,10 +766,34 @@ impl Ui {
                 let name: String = app.brain.model.tags[i].chars().take(14).collect();
                 let n = (probs[i] * 10.0).round() as usize;
                 let col = if i == idx[0] { 208 } else { 244 };
-                left.push(Row::new().styled(col, &format!("{name:<14} {}{} {:>3.0}%", "█".repeat(n), "░".repeat(10 - n), probs[i] * 100.0)).pad(LW));
+                left.push(
+                    Row::new()
+                        .styled(
+                            col,
+                            &format!(
+                                "{name:<14} {}{} {:>3.0}%",
+                                "█".repeat(n),
+                                "░".repeat(10 - n),
+                                probs[i] * 100.0
+                            ),
+                        )
+                        .pad(LW),
+                );
             }
-            left.push(Row::new().styled(245, &format!("coverage {:.0}%  ·  {:.0} µs", an.cov * 100.0, an.micros)).pad(LW));
-            left.push(Row::new().styled(240, "─ NEURONS ").styled(240, &"─".repeat(LW - 10)).pad(LW));
+            left.push(
+                Row::new()
+                    .styled(
+                        245,
+                        &format!("coverage {:.0}%  ·  {:.0} µs", an.cov * 100.0, an.micros),
+                    )
+                    .pad(LW),
+            );
+            left.push(
+                Row::new()
+                    .styled(240, "─ NEURONS ")
+                    .styled(240, &"─".repeat(LW - 10))
+                    .pad(LW),
+            );
             let mx = an.acts.iter().cloned().fold(1e-6f32, f32::max);
             for row in 0..an.acts.len().div_ceil(8) {
                 let mut r = Row::new().plain("  ");
@@ -571,20 +809,72 @@ impl Ui {
                             (v * 0.5 + self.rng_val(row * 8 + c) * 0.5).min(1.0)
                         };
                     }
-                    r = r.raw(format!("\x1b[48;5;{}m  \x1b[0m", heat(v)), 2).plain(" ");
+                    r = r
+                        .raw(format!("\x1b[48;5;{}m  \x1b[0m", heat(v)), 2)
+                        .plain(" ");
                 }
                 left.push(r.pad(LW));
             }
         } else {
-            left.push(Row::new().styled(245, "say something and I'll show").pad(LW));
-            left.push(Row::new().styled(245, "you what's going on in here.").pad(LW));
+            left.push(
+                Row::new()
+                    .styled(245, "say something and I'll show")
+                    .pad(LW),
+            );
+            left.push(
+                Row::new()
+                    .styled(245, "you what's going on in here.")
+                    .pad(LW),
+            );
         }
-        left.push(Row::new().styled(240, "─ STATUS ").styled(240, &"─".repeat(LW - 9)).pad(LW));
+        left.push(
+            Row::new()
+                .styled(240, "─ STATUS ")
+                .styled(240, &"─".repeat(LW - 9))
+                .pad(LW),
+        );
         let en = (p.energy * 5.0).ceil() as usize;
-        left.push(Row::new().styled(204, &"♥".repeat(p.hearts())).styled(240, &"♡".repeat(5 - p.hearts())).styled(250, &format!(" {} ({} pts)", p.bond_label(), p.bond)).pad(LW));
-        left.push(Row::new().styled(220, &"▮".repeat(en)).styled(240, &"▯".repeat(5 - en)).styled(250, &format!(" energy {:.0}%", p.energy * 100.0)).pad(LW));
-        left.push(Row::new().styled(250, &format!("facts {}/{} · dex {}/{}", p.factbook.len(), app.brain.facts.items.len(), p.dex.len(), app.brain.intents.len())).pad(LW));
-        left.push(Row::new().styled(240, &format!("{} · {} params · {:.0} KB", train::model_name(&app.brain.model), train::params_label(&app.brain.model), self.kb)).pad(LW));
+        left.push(
+            Row::new()
+                .styled(204, &"♥".repeat(p.hearts()))
+                .styled(240, &"♡".repeat(5 - p.hearts()))
+                .styled(250, &format!(" {} ({} pts)", p.bond_label(), p.bond))
+                .pad(LW),
+        );
+        left.push(
+            Row::new()
+                .styled(220, &"▮".repeat(en))
+                .styled(240, &"▯".repeat(5 - en))
+                .styled(250, &format!(" energy {:.0}%", p.energy * 100.0))
+                .pad(LW),
+        );
+        left.push(
+            Row::new()
+                .styled(
+                    250,
+                    &format!(
+                        "facts {}/{} · dex {}/{}",
+                        p.factbook.len(),
+                        app.brain.facts.items.len(),
+                        p.dex.len(),
+                        app.brain.intents.len()
+                    ),
+                )
+                .pad(LW),
+        );
+        left.push(
+            Row::new()
+                .styled(
+                    240,
+                    &format!(
+                        "{} · {} params · {:.0} KB",
+                        train::model_name(&app.brain.model),
+                        train::params_label(&app.brain.model),
+                        self.kb
+                    ),
+                )
+                .pad(LW),
+        );
         left.truncate(body_h);
         while left.len() < body_h {
             left.push(" ".repeat(LW));
@@ -602,7 +892,9 @@ impl Ui {
                 Who::Toast => (" ★  ", 220),
             };
             for (i, line) in wrap(&l.segs, rw - 5).iter().enumerate() {
-                let mut r = Row::new().styled(col, if i == 0 { label } else { "    " }).plain(" ");
+                let mut r = Row::new()
+                    .styled(col, if i == 0 { label } else { "    " })
+                    .plain(" ");
                 for (t, bg) in line {
                     let styled = match (&l.who, bg) {
                         (Who::You, Some(b)) => format!("\x1b[38;5;255;48;5;{b}m{t}\x1b[0m"),
@@ -628,9 +920,15 @@ impl Ui {
 
         let bar = fg(240, "│");
         for i in 0..body_h {
-            out.push_str(&format!("{bar} {} {bar} {} {bar}\x1b[K\n", left[i], chat[i]));
+            out.push_str(&format!(
+                "{bar} {} {bar} {} {bar}\x1b[K\n",
+                left[i], chat[i]
+            ));
         }
-        out.push_str(&format!("{}\x1b[K", fg(240, &format!("╰{}╯", "─".repeat(w - 2)))));
+        out.push_str(&format!(
+            "{}\x1b[K",
+            fg(240, &format!("╰{}╯", "─".repeat(w - 2)))
+        ));
         out
     }
 
@@ -654,12 +952,20 @@ impl Ui {
 
     fn prompt(&self) {
         let mut o = io::stdout().lock();
-        let _ = write!(o, "\x1b[{};1H\x1b[K\x1b[38;5;45m you ▸ \x1b[0m\x1b[?25h", self.h - 1);
+        let _ = write!(
+            o,
+            "\x1b[{};1H\x1b[K\x1b[38;5;45m you ▸ \x1b[0m\x1b[?25h",
+            self.h - 1
+        );
         let _ = o.flush();
     }
 
     fn clear_input_rows(&self) {
-        print!("\x1b[{};1H\x1b[K\x1b[{};1H\x1b[K\x1b[?25l", self.h - 1, self.h);
+        print!(
+            "\x1b[{};1H\x1b[K\x1b[{};1H\x1b[K\x1b[?25l",
+            self.h - 1,
+            self.h
+        );
     }
 
     fn sleep(&self, ms: u64) {
@@ -675,12 +981,18 @@ impl Ui {
 }
 
 fn say(ui: &mut Ui, who: Who, text: &str) {
-    ui.log.push(Line { who, segs: vec![(text.to_string(), None)] });
+    ui.log.push(Line {
+        who,
+        segs: vec![(text.to_string(), None)],
+    });
 }
 
 /// Reveal a bot message gradually: the mouth moves, punctuation gets a beat.
 fn typewrite(ui: &mut Ui, app: &App, text: &str) {
-    ui.log.push(Line { who: Who::Bot, segs: vec![(String::new(), None)] });
+    ui.log.push(Line {
+        who: Who::Bot,
+        segs: vec![(String::new(), None)],
+    });
     let chars: Vec<char> = text.chars().collect();
     let step = if ui.anim { 2 } else { chars.len().max(1) };
     let mut n = 0;
@@ -722,19 +1034,43 @@ fn welcome(app: &App) -> (String, &'static str) {
     let name = app.s.mem.name().map(String::from);
     let params = train::params_label(&app.brain.model);
     if crate::skills::birthday_today(&app.s.mem) {
-        let who = name.map(|n| format!(", {}", n.to_uppercase())).unwrap_or_default();
-        return (format!("HAPPY BIRTHDAY{who}!! I don't have cake, but I do have {params} parameters of pure enthusiasm."), "ecstatic");
+        let who = name
+            .map(|n| format!(", {}", n.to_uppercase()))
+            .unwrap_or_default();
+        return (
+            format!(
+                "HAPPY BIRTHDAY{who}!! I don't have cake, but I do have {params} parameters of pure enthusiasm."
+            ),
+            "ecstatic",
+        );
     }
     // time-of-day greeting about 60% of the time (when the time zone is known), a plain one otherwise
     let timed = crate::skills::local_hour().is_some() && crate::rng::time_seed() % 100 < 60;
-    let opener = if timed { crate::skills::greet_word() } else { "Hey" };
-    let (mut hello, mut emo) = (format!("{opener}{}! I'm TinyBot: {params} parameters, written from scratch in Rust.", name.as_ref().map(|n| format!(", {n}")).unwrap_or_default()), "joy");
+    let opener = if timed {
+        crate::skills::greet_word()
+    } else {
+        "Hey"
+    };
+    let (mut hello, mut emo) = (
+        format!(
+            "{opener}{}! I'm TinyBot: {params} parameters, written from scratch in Rust.",
+            name.as_ref().map(|n| format!(", {n}")).unwrap_or_default()
+        ),
+        "joy",
+    );
     if p.away_days >= 3 && p.bond >= 10 {
-        hello = format!("{}, you're back after {} days! I missed you.", name.as_deref().unwrap_or("Hey"), p.away_days);
+        hello = format!(
+            "{}, you're back after {} days! I missed you.",
+            name.as_deref().unwrap_or("Hey"),
+            p.away_days
+        );
         emo = "love";
     }
     if let Some(t) = &p.returning {
-        let t: Vec<String> = t.split(',').map(|x| x.replace("skill:", "").replace('_', " ")).collect();
+        let t: Vec<String> = t
+            .split(',')
+            .map(|x| x.replace("skill:", "").replace('_', " "))
+            .collect();
         hello.push_str(&format!(" Last time we talked about {}.", t.join(", ")));
     }
     if p.fresh_streak {
@@ -823,7 +1159,12 @@ pub fn run(app: &mut App) {
         };
         ui.last_input = Instant::now();
         ui.clear_input_rows();
-        let line: String = line.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string();
+        let line: String = line
+            .chars()
+            .filter(|c| !c.is_control())
+            .collect::<String>()
+            .trim()
+            .to_string();
         if line.is_empty() {
             ui.console.clear();
             ui.draw(app);
@@ -834,7 +1175,11 @@ pub fn run(app: &mut App) {
         if line.starts_with('/') {
             if line == "/anim" {
                 ui.anim = !ui.anim;
-                let msg = if ui.anim { "animations on" } else { "animations off" };
+                let msg = if ui.anim {
+                    "animations on"
+                } else {
+                    "animations off"
+                };
                 ui.console_set("/anim", vec![msg.to_string()]);
             } else if let Some(arg) = line.strip_prefix("/emote") {
                 match EMOTIONS.iter().find(|e| **e == arg.trim()) {
@@ -842,7 +1187,10 @@ pub fn run(app: &mut App) {
                         ui.set_emo(e, 70);
                         ui.console_set("/emote", vec![format!("making a {e} face")]);
                     }
-                    None => ui.console_set("/emote", vec!["usage: /emote <name>".to_string(), EMOTIONS.join(" ")]),
+                    None => ui.console_set(
+                        "/emote",
+                        vec!["usage: /emote <name>".to_string(), EMOTIONS.join(" ")],
+                    ),
                 }
             } else {
                 let r = cmds::run(app, &line);
@@ -859,7 +1207,10 @@ pub fn run(app: &mut App) {
         }
 
         // 1. show the user's message right away
-        ui.log.push(Line { who: Who::You, segs: vec![(line.clone(), None)] });
+        ui.log.push(Line {
+            who: Who::You,
+            segs: vec![(line.clone(), None)],
+        });
         // 2. think: the brain panel flickers and a scanner sweeps the neurons, then it settles
         let reply = app.brain.reply(&mut app.s, &line);
         let mut an = app.brain.analyze(&app.s, &line);
@@ -875,7 +1226,11 @@ pub fn run(app: &mut App) {
             for step in 0..14 {
                 let t = step as f32 / 13.0;
                 ui.scan = Some(step % 8);
-                ui.shown = Some((0..n).map(|i| final_probs[i] * t + ui.rng.f32() * 0.25 * (1.0 - t)).collect());
+                ui.shown = Some(
+                    (0..n)
+                        .map(|i| final_probs[i] * t + ui.rng.f32() * 0.25 * (1.0 - t))
+                        .collect(),
+                );
                 ui.draw(app);
                 ui.sleep(30);
             }
@@ -884,7 +1239,11 @@ pub fn run(app: &mut App) {
         ui.scan = None;
         let words: Vec<&str> = line.split_whitespace().collect();
         if let Some(l) = ui.log.last_mut() {
-            l.segs = words.iter().enumerate().map(|(i, wd)| (wd.to_string(), sal.get(i).and_then(|(_, d)| sal_bg(*d)))).collect();
+            l.segs = words
+                .iter()
+                .enumerate()
+                .map(|(i, wd)| (wd.to_string(), sal.get(i).and_then(|(_, d)| sal_bg(*d))))
+                .collect();
         }
         ui.set_emo(reply.emo, 34);
         ui.draw(app);
@@ -894,10 +1253,18 @@ pub fn run(app: &mut App) {
         show_reply(&mut ui, app, &reply.tag, &reply.text);
         for t in &reply.toasts {
             ui.sleep(160);
-            let big = t.starts_with("LEVEL") || t.starts_with("Achievement") || t.starts_with("Bond");
+            let big =
+                t.starts_with("LEVEL") || t.starts_with("Achievement") || t.starts_with("Bond");
             say(&mut ui, Who::Toast, t);
             if big {
-                ui.set_emo(if t.starts_with("Bond") { "love" } else { "proud" }, 40);
+                ui.set_emo(
+                    if t.starts_with("Bond") {
+                        "love"
+                    } else {
+                        "proud"
+                    },
+                    40,
+                );
                 ui.flash = 12;
                 for _ in 0..8 {
                     ui.draw(app);
@@ -909,7 +1276,13 @@ pub fn run(app: &mut App) {
             let _ = crate::intents::append_learned(&app.brain.model.tags[k].clone(), &phrase, None);
             ui.set_emo("think", 30);
             app.start_retrain();
-            say(&mut ui, Who::Sys, &format!("learning {phrase:?} in the background, keep chatting (/unlearn undoes it)"));
+            say(
+                &mut ui,
+                Who::Sys,
+                &format!(
+                    "learning {phrase:?} in the background, keep chatting (/unlearn undoes it)"
+                ),
+            );
         }
         app.s.persona.store(&mut app.s.mem);
         app.s.mem.save();
@@ -924,6 +1297,12 @@ pub fn run(app: &mut App) {
     }
     app.s.persona.store(&mut app.s.mem);
     app.s.mem.save();
+    if app.retraining() {
+        println!("saving what I just learned (Ctrl-C to skip, I'll finish next launch)...");
+        while app.retraining() {
+            app.wait_retrain();
+        }
+    }
     println!("\x1b[{};1H\x1b[?25h", ui.h);
 }
 
@@ -938,7 +1317,11 @@ mod tests {
                 let rows = draw_face(e, t, 81, t % 2 == 0, 0, "label");
                 assert_eq!(rows.len(), 8, "{e}");
                 for r in rows {
-                    assert_eq!(r.w, LW, "{e} at t={t} has a row of width {} (strip ANSI: {:?})", r.w, r.s);
+                    assert_eq!(
+                        r.w, LW,
+                        "{e} at t={t} has a row of width {} (strip ANSI: {:?})",
+                        r.w, r.s
+                    );
                 }
             }
         }
@@ -957,21 +1340,37 @@ mod tests {
         assert_eq!(text_w("👨\u{200d}👩\u{200d}👧"), 2); // joined family is one glyph
         assert_eq!(text_w("🇮🇳"), 2); // flag = two regional indicators
         assert_eq!(text_w("♥♡▓░"), 4); // symbols the UI itself draws stay narrow
-        assert_eq!(Row::new().plain("日本").styled(1, "a😀").pad(10).len() - fg(1, "a😀").len() - "日本".len(), 3); // padded to 10 columns
+        assert_eq!(
+            Row::new().plain("日本").styled(1, "a😀").pad(10).len()
+                - fg(1, "a😀").len()
+                - "日本".len(),
+            3
+        ); // padded to 10 columns
     }
 
     #[test]
     fn split_and_chunk_respect_columns() {
-        assert_eq!(split_w("日本語です", 5), ("日本".to_string(), "語です".to_string()));
+        assert_eq!(
+            split_w("日本語です", 5),
+            ("日本".to_string(), "語です".to_string())
+        );
         assert_eq!(split_w("abc", 10), ("abc".to_string(), String::new()));
         // narrower than one wide character still makes progress
         assert_eq!(chunk_w("日本", 1), vec!["日".to_string(), "本".to_string()]);
-        for line in ["你好世界你好世界你好世界", "😀😀😀😀😀😀😀😀 abc", "mixed 日本 and 😀 and plain text here"] {
+        for line in [
+            "你好世界你好世界你好世界",
+            "😀😀😀😀😀😀😀😀 abc",
+            "mixed 日本 and 😀 and plain text here",
+        ] {
             for width in [3usize, 7, 12] {
                 let parts = chunk_w(line, width);
                 assert_eq!(parts.concat(), line);
                 for p in &parts {
-                    assert!(text_w(p) <= width.max(2), "{p:?} is {} wide, limit {width}", text_w(p));
+                    assert!(
+                        text_w(p) <= width.max(2),
+                        "{p:?} is {} wide, limit {width}",
+                        text_w(p)
+                    );
                 }
             }
         }
@@ -979,7 +1378,10 @@ mod tests {
 
     #[test]
     fn wrap_handles_cjk_and_emoji() {
-        let segs = vec![("你好世界你好世界你好世界 😀😀😀😀😀😀😀😀 hello wide world".to_string(), None)];
+        let segs = vec![(
+            "你好世界你好世界你好世界 😀😀😀😀😀😀😀😀 hello wide world".to_string(),
+            None,
+        )];
         for width in [8usize, 12, 20] {
             for l in wrap(&segs, width) {
                 let w: usize = l.iter().map(|(t, _)| text_w(t)).sum();
@@ -990,7 +1392,10 @@ mod tests {
 
     #[test]
     fn wrap_never_exceeds_width() {
-        let segs = vec![("supercalifragilisticexpialidocious_and_then_some a b c".to_string(), None)];
+        let segs = vec![(
+            "supercalifragilisticexpialidocious_and_then_some a b c".to_string(),
+            None,
+        )];
         for l in wrap(&segs, 12) {
             assert!(l.iter().map(|(t, _)| t.chars().count()).sum::<usize>() <= 12);
         }

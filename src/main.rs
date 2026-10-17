@@ -1,40 +1,58 @@
-use tinybot::bot::{Brain, Session};
-use tinybot::cmds::{self, App};
-use tinybot::model::Ensemble;
-use tinybot::skills::Memory;
-use tinybot::{intents, train, tui};
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::time::Instant;
 use std::{env, process};
+use tinybot::bot::{Brain, Session};
+use tinybot::cmds::{self, App};
+use tinybot::skills::Memory;
+use tinybot::train::Found;
+use tinybot::{intents, train, tui};
 
 const MEMORY_PATH: &str = "memory.txt";
 const FLOW_PATH: &str = "flow.txt";
 
-fn load_or_train(o: &train::Opts) -> Brain {
+fn load_or_train(o: &train::Opts) -> (Brain, bool) {
     let intents = intents::load();
     let path = o.path();
-    let m = match Ensemble::load(&path) {
-        Some(m) if train::model_is_current(&m, &intents, o) => m,
-        _ => {
-            eprintln!("({path} missing or out of date with the intents, training first)");
-            train::train_quiet(o)
+    match train::find_model(&path, &intents, o) {
+        Found::Current(m) => (Brain::new(m, intents), false),
+        Found::Stale(m) => {
+            eprintln!(
+                "({path} predates your latest phrases: using it now, relearning in the background)"
+            );
+            (Brain::new(m, intents), true)
         }
-    };
-    Brain::new(m, intents)
+        Found::Reshaped(old) => {
+            eprintln!("({path} was built for different intents: quick relearn)");
+            let m = train::quick_student(&intents, old.temp, old.cfg(), old.clarify_sim);
+            let _ = m.save(&path);
+            (Brain::new(m, intents), false)
+        }
+        Found::Missing => {
+            eprintln!("({path} missing, training first)");
+            (Brain::new(train::train_quiet(o), intents), false)
+        }
+    }
 }
 
 fn new_app(o: &train::Opts) -> App {
-    let brain = load_or_train(o);
+    let (brain, stale) = load_or_train(o);
     let mut s = Session::new(Memory::load(MEMORY_PATH), true);
     s.load_flow(FLOW_PATH);
     let mut app = App::new(brain, s);
     app.model_path = o.path();
+    if stale {
+        app.start_retrain();
+    }
     app
 }
 
 fn cmd_plain(o: &train::Opts) {
     let mut app = new_app(o);
-    println!("TinyBot ready ({}, {} params). /help for commands.", train::model_name(&app.brain.model), train::params_label(&app.brain.model));
+    println!(
+        "TinyBot ready ({}, {} params). /help for commands.",
+        train::model_name(&app.brain.model),
+        train::params_label(&app.brain.model)
+    );
     let stdin = io::stdin();
     loop {
         print!("you> ");
@@ -43,9 +61,17 @@ fn cmd_plain(o: &train::Opts) {
         if stdin.lock().read_line(&mut line).unwrap_or(0) == 0 {
             break;
         }
-        let line: String = line.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string();
+        let line: String = line
+            .chars()
+            .filter(|c| !c.is_control())
+            .collect::<String>()
+            .trim()
+            .to_string();
         if line.is_empty() {
             continue;
+        }
+        if let Some(m) = app.poll_retrain() {
+            println!("  ({m})");
         }
         if line.starts_with('/') {
             let r = cmds::run(&mut app, &line);
@@ -94,7 +120,15 @@ fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     let plain = args.iter().any(|a| a == "--plain");
     let o = train::Opts::parse(&args);
-    let cmd = args.iter().find(|a| !a.starts_with("--") && !matches!(a.as_str(), "nano" | "small" | "base" | "large" | "xl" | "max" | "bow" | "cnn" | "gru" | "het") && a.parse::<usize>().is_err() && !a.contains(','));
+    let cmd = args.iter().find(|a| {
+        !a.starts_with("--")
+            && !matches!(
+                a.as_str(),
+                "nano" | "small" | "base" | "large" | "xl" | "max" | "bow" | "cnn" | "gru" | "het"
+            )
+            && a.parse::<usize>().is_err()
+            && !a.contains(',')
+    });
     match cmd.map(String::as_str) {
         Some("train") if args.iter().any(|a| a == "--all") => train::cmd_train_all(&o),
         Some("train") => {
@@ -106,9 +140,14 @@ fn main() {
         Some("speed") => train::cmd_speed(intents::load().len()),
         Some("ctx") => train::cmd_ctx_eval(),
         Some("bench") => {
-            let b = load_or_train(&o);
+            let (b, _) = load_or_train(&o);
             let (us, qps) = train::bench(&b.model);
-            println!("{}: {us:.1} us/query, {qps:.0} queries/s, {} params, {:.0} KB", train::model_name(&b.model), train::params_label(&b.model), train::model_kb(&b.model));
+            println!(
+                "{}: {us:.1} us/query, {qps:.0} queries/s, {} params, {:.0} KB",
+                train::model_name(&b.model),
+                train::params_label(&b.model),
+                train::model_kb(&b.model)
+            );
         }
         Some("chat") | None => {
             if plain || !io::stdout().is_terminal() || !io::stdin().is_terminal() {
@@ -118,7 +157,9 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("usage: tinybot [chat [--plain] | train | eval | sweep | models | speed | ctx | bench]\n       options: --size nano|small|base|large|xl|max  --arch bow|cnn|gru  --teacher bow|het  --no-aug  --folds 0,3\n       train --all [--archs bow,gru] [--tiers nano,base]   builds many sizes from one teacher into models/");
+            eprintln!(
+                "usage: tinybot [chat [--plain] | train | eval | sweep | models | speed | ctx | bench]\n       options: --size nano|small|base|large|xl|max  --arch bow|cnn|gru  --teacher bow|het  --no-aug  --folds 0,3\n       train --all [--archs bow,gru] [--tiers nano,base]   builds many sizes from one teacher into models/"
+            );
             process::exit(2);
         }
     }

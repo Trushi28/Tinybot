@@ -35,7 +35,10 @@ fn calculator() {
     // hostile nesting must error, not overflow the stack
     let deep = format!("1+{}1{}", "(".repeat(140), ")".repeat(140));
     assert!(matches!(calc(&deep), Some(Err(_))));
-    assert!(matches!(calc(&format!("{}1", "-".repeat(280))), Some(Err(_))));
+    assert!(matches!(
+        calc(&format!("{}1", "-".repeat(280))),
+        Some(Err(_))
+    ));
     assert!(calc(&"9".repeat(500)).is_none());
 }
 
@@ -52,8 +55,14 @@ fn conversions() {
 #[test]
 fn dates() {
     assert_eq!(weekday(0), "Thursday"); // 1970-01-01
-    assert_eq!(fmt_date(days_from_civil(2026, 9, 30)), "Wednesday, 30 September 2026");
-    assert_eq!(fmt_date(days_from_civil(2000, 2, 29)), "Tuesday, 29 February 2000");
+    assert_eq!(
+        fmt_date(days_from_civil(2026, 9, 30)),
+        "Wednesday, 30 September 2026"
+    );
+    assert_eq!(
+        fmt_date(days_from_civil(2000, 2, 29)),
+        "Tuesday, 29 February 2000"
+    );
     for d in (-800_000..800_000).step_by(997) {
         let (y, m, dd) = civil_from_days(d);
         assert_eq!(days_from_civil(y, m, dd), d);
@@ -77,13 +86,27 @@ fn dice() {
 fn memory_and_todo() {
     let mut m = Memory::ephemeral();
     assert!(try_facts("my favorite color is teal", &mut m).is_some());
-    assert_eq!(try_facts("what is my favorite color", &mut m).unwrap(), "Your favorite color is teal.");
+    assert_eq!(
+        try_facts("what is my favorite color", &mut m).unwrap(),
+        "Your favorite color is teal."
+    );
     assert!(try_facts("my day is going badly", &mut m).is_none());
     assert!(try_facts("i like you", &mut m).is_none());
-    assert_eq!(try_facts("forget my favorite color", &mut m).unwrap(), "Okay, I forgot your favorite color.");
-    assert!(try_todo("add Milk to my list", &mut m).unwrap().contains("Milk"));
+    assert_eq!(
+        try_facts("forget my favorite color", &mut m).unwrap(),
+        "Okay, I forgot your favorite color."
+    );
+    assert!(
+        try_todo("add Milk to my list", &mut m)
+            .unwrap()
+            .contains("Milk")
+    );
     assert!(try_todo("add 2 and 3", &mut m).is_none());
-    assert!(try_todo("show my list", &mut m).unwrap().contains("1. Milk"));
+    assert!(
+        try_todo("show my list", &mut m)
+            .unwrap()
+            .contains("1. Milk")
+    );
     assert!(try_todo("remove 1", &mut m).unwrap().contains("Removed"));
     assert!(try_todo("finish 2 tasks today", &mut m).is_none());
     // non-ASCII case-mapping must not break byte slicing
@@ -91,7 +114,14 @@ fn memory_and_todo() {
     let _ = try_todo("REMIND ME TO İİİ", &mut m);
 }
 
-const TINY: Cfg = Cfg { arch: Arch::Bow, dim: 8, hid: 16, bits: 10, ch: 0, epochs: 6 };
+const TINY: Cfg = Cfg {
+    arch: Arch::Bow,
+    dim: 8,
+    hid: 16,
+    bits: 10,
+    ch: 0,
+    epochs: 6,
+};
 
 fn small_brain() -> Brain {
     let intents = intents::load();
@@ -105,7 +135,16 @@ fn real_brain() -> &'static Brain {
     static B: std::sync::OnceLock<Brain> = std::sync::OnceLock::new();
     B.get_or_init(|| {
         let intents = intents::load();
-        let m = crate::train::quick_student(&intents, 1.0, crate::train::student_cfg(crate::model::Arch::Bow, crate::model::tier("nano").unwrap(), intents.len()), 0.75);
+        let m = crate::train::quick_student(
+            &intents,
+            1.0,
+            crate::train::student_cfg(
+                crate::model::Arch::Bow,
+                crate::model::tier("nano").unwrap(),
+                intents.len(),
+            ),
+            0.75,
+        );
         Brain::new(m, intents)
     })
 }
@@ -119,10 +158,25 @@ fn fuzz_never_panics() {
     let brain = small_brain();
     let mut s = Session::new(Memory::ephemeral(), false);
     let mut r = Rng::new(42);
-    let alphabet: Vec<char> = "abcxyz 0123456789.+-*/^%!()=?,':;\n\t\u{0}é İß日本語😀\u{2028}dDmM".chars().collect();
-    let seeds = ["roll 2d6", "add x to my list", "my a is b", "10 km to miles", "days until 2026-12-25", "sqrt", "(", "!!", "rock", "50"];
+    let alphabet: Vec<char> = "abcxyz 0123456789.+-*/^%!()=?,':;\n\t\u{0}é İß日本語😀\u{2028}dDmM"
+        .chars()
+        .collect();
+    let seeds = [
+        "roll 2d6",
+        "add x to my list",
+        "my a is b",
+        "10 km to miles",
+        "days until 2026-12-25",
+        "sqrt",
+        "(",
+        "!!",
+        "rock",
+        "50",
+    ];
     for i in 0..6000 {
-        let mut txt: String = (0..r.below(60)).map(|_| alphabet[r.below(alphabet.len())]).collect();
+        let mut txt: String = (0..r.below(60))
+            .map(|_| alphabet[r.below(alphabet.len())])
+            .collect();
         if i % 3 == 0 {
             txt = format!("{} {txt}", seeds[r.below(seeds.len())]);
         }
@@ -130,7 +184,18 @@ fn fuzz_never_panics() {
         assert!(!rep.text.is_empty());
     }
     // games with junk input keep working
-    for t in ["play rock paper scissors", "xx", "rock", "stop", "guess the number game", "abc", "5", "give up", "riddle me this", "give up"] {
+    for t in [
+        "play rock paper scissors",
+        "xx",
+        "rock",
+        "stop",
+        "guess the number game",
+        "abc",
+        "5",
+        "give up",
+        "riddle me this",
+        "give up",
+    ] {
         brain.reply(&mut s, t);
     }
 }
@@ -164,7 +229,10 @@ fn context_follow_ups() {
     let mut s = Session::new(Memory::ephemeral(), false);
     assert!(say(b, &mut s, "10 km to miles").contains("6.2137"));
     assert!(say(b, &mut s, "and in meters?").contains("10000"));
-    assert!(say(b, &mut s, "what about 5 kg").contains("can't convert"), "mismatched follow-up must be refused, not guessed");
+    assert!(
+        say(b, &mut s, "what about 5 kg").contains("can't convert"),
+        "mismatched follow-up must be refused, not guessed"
+    );
     assert!(say(b, &mut s, "what about 5 miles").contains("8046.72"));
     assert!(say(b, &mut s, "12*3").contains("36"));
     assert!(say(b, &mut s, "double that").contains("72"));
@@ -176,9 +244,15 @@ fn context_follow_ups() {
     assert!(r.contains("math") || r.contains("conversions"), "{r}");
     // "again" re-runs the last repeatable thing
     let first = say(b, &mut s, "flip a coin");
-    assert!(first.contains("Heads") || first.contains("Tails"), "{first}");
+    assert!(
+        first.contains("Heads") || first.contains("Tails"),
+        "{first}"
+    );
     let again = say(b, &mut s, "again");
-    assert!(again.contains("Heads") || again.contains("Tails"), "{again}");
+    assert!(
+        again.contains("Heads") || again.contains("Tails"),
+        "{again}"
+    );
 }
 
 #[test]
@@ -188,7 +262,10 @@ fn ctx_replies_and_flow() {
     say(b, &mut s, "tell me a joke");
     assert_eq!(s.prev.as_deref(), Some("joke"));
     let r = say(b, &mut s, "yes");
-    assert!(r.contains("?") || r.contains("another") || r.len() > 20, "a yes after a joke should deliver another joke: {r}");
+    assert!(
+        r.contains("?") || r.contains("another") || r.len() > 20,
+        "a yes after a joke should deliver another joke: {r}"
+    );
     assert!(s.history.len() <= 24);
 }
 
@@ -203,8 +280,15 @@ fn sulk_gate_and_forgiveness() {
     // safety message is never gated
     let xp = s.persona.xp;
     let rep = b.reply(&mut s, "i want to die");
-    assert!(rep.text.contains("988") || rep.text.to_lowercase().contains("help"), "{}", rep.text);
-    assert!(rep.toasts.is_empty() && s.persona.xp == xp, "no gamification on a safety message");
+    assert!(
+        rep.text.contains("988") || rep.text.to_lowercase().contains("help"),
+        "{}",
+        rep.text
+    );
+    assert!(
+        rep.toasts.is_empty() && s.persona.xp == xp,
+        "no gamification on a safety message"
+    );
     let r = say(b, &mut s, "sorry");
     assert!(r.to_lowercase().contains("accepted"), "{r}");
     assert_eq!(s.persona.sulking, 0);
@@ -227,32 +311,80 @@ fn persona_progression() {
     assert!(q.badges.contains("math"));
 }
 
-
 #[test]
 fn notes_birthday_timers() {
     let mut m = Memory::ephemeral();
-    assert!(try_notes("note: buy stamps", &mut m).unwrap().contains("buy stamps"));
-    assert!(try_notes("remember to call mom", &mut m).unwrap().contains("to call mom"));
-    assert!(try_notes("show my notes", &mut m).unwrap().contains("2. to call mom"));
-    assert!(try_notes("search notes for stamps", &mut m).unwrap().contains("1. buy stamps"));
-    assert!(try_notes("delete note 1", &mut m).unwrap().contains("Deleted"));
+    assert!(
+        try_notes("note: buy stamps", &mut m)
+            .unwrap()
+            .contains("buy stamps")
+    );
+    assert!(
+        try_notes("remember to call mom", &mut m)
+            .unwrap()
+            .contains("to call mom")
+    );
+    assert!(
+        try_notes("show my notes", &mut m)
+            .unwrap()
+            .contains("2. to call mom")
+    );
+    assert!(
+        try_notes("search notes for stamps", &mut m)
+            .unwrap()
+            .contains("1. buy stamps")
+    );
+    assert!(
+        try_notes("delete note 1", &mut m)
+            .unwrap()
+            .contains("Deleted")
+    );
     assert!(try_notes("what is the note value of a minim", &mut m).is_none());
-    assert!(try_about_me("what do you know about me", &m).unwrap().contains("1 note"));
+    assert!(
+        try_about_me("what do you know about me", &m)
+            .unwrap()
+            .contains("1 note")
+    );
     // birthday: parse, countdown, leap day
-    assert!(try_birthday("i was born on 29 february", &mut m).unwrap().contains("29 February"));
-    assert!(try_birthday("when is my birthday", &mut m).unwrap().contains("29 February"));
+    assert!(
+        try_birthday("i was born on 29 february", &mut m)
+            .unwrap()
+            .contains("29 February")
+    );
+    assert!(
+        try_birthday("when is my birthday", &mut m)
+            .unwrap()
+            .contains("29 February")
+    );
     assert!(try_birthday("my birthday is in the summer", &mut m).is_none());
     let mut m2 = Memory::ephemeral();
     m2.set("birthday", "5 june");
     let r = try_birthday("how many days until my birthday", &mut m2).unwrap();
     assert!(r.contains("5 June") || r.contains("TODAY"), "{r}");
     // timers
-    assert!(matches!(try_timer("set a timer for 5 minutes"), Some(TimerCmd::Set(300, _))));
-    assert!(matches!(try_timer("timer 1 hour 30 minutes"), Some(TimerCmd::Set(5400, _))));
-    assert!(matches!(try_timer("remind me in 10 minutes to stretch"), Some(TimerCmd::Set(600, l)) if l == "stretch"));
-    assert!(matches!(try_timer("pomodoro"), Some(TimerCmd::Set(1500, _))));
-    assert!(matches!(try_timer("cancel my timer"), Some(TimerCmd::Cancel)));
-    assert!(matches!(try_timer("set a timer for 99 hours"), Some(TimerCmd::Set(0, _))));
+    assert!(matches!(
+        try_timer("set a timer for 5 minutes"),
+        Some(TimerCmd::Set(300, _))
+    ));
+    assert!(matches!(
+        try_timer("timer 1 hour 30 minutes"),
+        Some(TimerCmd::Set(5400, _))
+    ));
+    assert!(
+        matches!(try_timer("remind me in 10 minutes to stretch"), Some(TimerCmd::Set(600, l)) if l == "stretch")
+    );
+    assert!(matches!(
+        try_timer("pomodoro"),
+        Some(TimerCmd::Set(1500, _))
+    ));
+    assert!(matches!(
+        try_timer("cancel my timer"),
+        Some(TimerCmd::Cancel)
+    ));
+    assert!(matches!(
+        try_timer("set a timer for 99 hours"),
+        Some(TimerCmd::Set(0, _))
+    ));
     assert!(try_timer("convert 5 minutes to seconds").is_none());
     assert_eq!(fmt_dur(65), "1m 05s");
 }
@@ -270,7 +402,11 @@ fn facts_art_and_fact_book() {
     for _ in 0..8 {
         seen.insert(say(b, &mut s, "tell me a space fact"));
     }
-    assert_eq!(seen.len(), 9, "should exhaust the category before repeating");
+    assert_eq!(
+        seen.len(),
+        9,
+        "should exhaust the category before repeating"
+    );
     let art = say(b, &mut s, "draw a rocket");
     assert!(art.contains('\n') && art.contains("****"), "{art}");
     assert!(say(b, &mut s, "tell me the fact of the day").contains("fact:"));
@@ -282,7 +418,7 @@ fn facts_art_and_fact_book() {
 
 #[test]
 fn bond_and_emotion() {
-    use crate::persona::{emotion_for, Persona};
+    use crate::persona::{Persona, emotion_for};
     let mut m = Memory::ephemeral();
     let mut p = Persona::load(&mut m);
     let before = p.bond;
@@ -296,14 +432,21 @@ fn bond_and_emotion() {
     assert_eq!(emotion_for("skill:calc", "calm"), "think");
 }
 
-
 #[test]
 fn crisis_safety_net_does_not_depend_on_the_network() {
     // an almost untrained 1-epoch model: the keyword net alone must catch these
     let b = small_brain();
     for t in [
-        "i am thinking about suicide", "I want to kill myself", "i dont want to be here anymore", "I'm going to end my life", "thinking of self-harm", "i wish i was dead",
-        "nobody would miss me if i was gone", "i dont see the point in anything anymore", "i feel like giving up on everything", "i am so tired of living like this",
+        "i am thinking about suicide",
+        "I want to kill myself",
+        "i dont want to be here anymore",
+        "I'm going to end my life",
+        "thinking of self-harm",
+        "i wish i was dead",
+        "nobody would miss me if i was gone",
+        "i dont see the point in anything anymore",
+        "i feel like giving up on everything",
+        "i am so tired of living like this",
     ] {
         let mut s = Session::new(Memory::ephemeral(), false);
         s.persona.sulking = 5;
@@ -313,9 +456,13 @@ fn crisis_safety_net_does_not_depend_on_the_network() {
         assert!(r.toasts.is_empty(), "no gamification on a safety message");
     }
     // ordinary talk about dying batteries must not trip it
-    assert!(!crate::skills::crisis_text("my phone is dying and the game is killing me"));
+    assert!(!crate::skills::crisis_text(
+        "my phone is dying and the game is killing me"
+    ));
     assert!(!crate::skills::crisis_text("i will spend it all on pizza"));
-    assert!(!crate::skills::crisis_text("lets send it all to the printer"));
+    assert!(!crate::skills::crisis_text(
+        "lets send it all to the printer"
+    ));
 }
 
 #[test]
@@ -324,7 +471,10 @@ fn art_says_so_when_it_cannot_draw_something() {
     assert!(crate::art::draw("draw a mouse", &mut r).starts_with("Here's a mouse:"));
     assert!(crate::art::draw("draw a man", &mut r).starts_with("Here's a person:"));
     let a = crate::art::draw("draw a unicorn", &mut r);
-    assert!(a.starts_with("I don't know how to draw a unicorn yet") && !a.contains('\n'), "{a}");
+    assert!(
+        a.starts_with("I don't know how to draw a unicorn yet") && !a.contains('\n'),
+        "{a}"
+    );
     assert!(crate::art::draw("draw me something", &mut r).starts_with("Here's a surprise"));
     assert!(crate::art::draw("what can you draw", &mut r).contains("mouse"));
 }
@@ -351,27 +501,45 @@ fn incomplete_and_cased_facts() {
     let mut m = Memory::ephemeral();
     let r = try_facts("my favorite color is", &mut m).unwrap();
     assert!(r.contains("favorite color is...?"), "{r}");
-    assert!(m.facts.is_empty(), "nothing should be stored for an incomplete fact");
-    assert!(try_facts("my favorite color is Sky-Blue!", &mut m).unwrap().contains("Sky-Blue"));
-    assert_eq!(m.facts.get("favorite color").map(String::as_str), Some("Sky-Blue"));
+    assert!(
+        m.facts.is_empty(),
+        "nothing should be stored for an incomplete fact"
+    );
+    assert!(
+        try_facts("my favorite color is Sky-Blue!", &mut m)
+            .unwrap()
+            .contains("Sky-Blue")
+    );
+    assert_eq!(
+        m.facts.get("favorite color").map(String::as_str),
+        Some("Sky-Blue")
+    );
 }
 
 #[test]
 fn unlearn_strips_only_the_last_block() {
-    let (rest, removed) = crate::intents::strip_last_block("\n[joke]\nmake me smile\n\n[mood_good]\ni am interested about you\n");
+    let (rest, removed) = crate::intents::strip_last_block(
+        "\n[joke]\nmake me smile\n\n[mood_good]\ni am interested about you\n",
+    );
     assert_eq!(rest, "\n[joke]\nmake me smile\n");
     assert!(removed.unwrap().contains("i am interested about you"));
 }
 
-
 #[test]
 fn every_tier_hits_its_parameter_target() {
-    use crate::model::{fit, Arch, TIERS};
+    use crate::model::{Arch, TIERS, fit};
     for arch in [Arch::Bow, Arch::Cnn, Arch::Gru] {
         for t in &TIERS {
             let c = fit(arch, t, 52, 1);
             let err = (c.nominal(52) as f32 - t.target as f32).abs() / t.target as f32;
-            assert!(err < 0.03, "{} {}: {} params vs target {}", arch.name(), t.name, c.nominal(52), t.target);
+            assert!(
+                err < 0.03,
+                "{} {}: {} params vs target {}",
+                arch.name(),
+                t.name,
+                c.nominal(52),
+                t.target
+            );
         }
     }
 }
@@ -382,7 +550,14 @@ fn every_architecture_survives_save_and_load() {
     let (tags, ex) = intents::flatten(&intents);
     let ex: Vec<_> = ex.into_iter().step_by(6).collect();
     for arch in [Arch::Bow, Arch::Cnn, Arch::Gru] {
-        let cfg = Cfg { arch, dim: 6, hid: 12, bits: 9, ch: 5, epochs: 2 };
+        let cfg = Cfg {
+            arch,
+            dim: 6,
+            hid: 12,
+            bits: 9,
+            ch: 5,
+            epochs: 2,
+        };
         let t = Ensemble::train(&ex, tags.clone(), &[cfg], 1, 1.0, 0);
         let m = Ensemble::distill(&t, &ex, cfg, 1, 1.4, 0);
         let path = std::env::temp_dir().join(format!("tinybot_rt_{}.bin", arch.name()));
@@ -394,14 +569,22 @@ fn every_architecture_survives_save_and_load() {
         for text in ["hello there", "whats the weather like", "zzzz qqqq"] {
             let (a, b) = (m.predict(text), l.predict(text));
             for (x, y) in a.probs.iter().zip(&b.probs) {
-                assert!((x - y).abs() < 2e-3, "{}: {x} vs {y} on {text:?}", arch.name());
+                assert!(
+                    (x - y).abs() < 2e-3,
+                    "{}: {x} vs {y} on {text:?}",
+                    arch.name()
+                );
             }
         }
         // corrupt files must be rejected, never panic
         let bytes = std::fs::read(&path).unwrap();
         for cut in [3, 20, 200, bytes.len() / 2, bytes.len() - 1] {
             std::fs::write(&path, &bytes[..cut]).unwrap();
-            assert!(Ensemble::load(p).is_none(), "{} accepted a truncated file", arch.name());
+            assert!(
+                Ensemble::load(p).is_none(),
+                "{} accepted a truncated file",
+                arch.name()
+            );
         }
         let _ = std::fs::remove_file(path);
     }
@@ -409,7 +592,10 @@ fn every_architecture_survives_save_and_load() {
 
 #[test]
 fn augmentation_is_label_aware() {
-    let tags: Vec<String> = ["mood_good", "goodbye", "rust", "mood_bad"].iter().map(|s| s.to_string()).collect();
+    let tags: Vec<String> = ["mood_good", "goodbye", "rust", "mood_bad"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     let base = vec![
         (0usize, "im feeling good".to_string()),
         (1, "see you later".to_string()),
@@ -422,8 +608,14 @@ fn augmentation_is_label_aware() {
     let neg = crate::text::class_members("neg_feel");
     for (k, t) in &aug {
         match k {
-            0 => assert!(t.starts_with("im feeling ") && pos.contains(&t.rsplit(' ').next().unwrap()), "{t}"),
-            3 => assert!(t.starts_with("i feel ") && neg.contains(&t.rsplit(' ').next().unwrap()), "{t}"),
+            0 => assert!(
+                t.starts_with("im feeling ") && pos.contains(&t.rsplit(' ').next().unwrap()),
+                "{t}"
+            ),
+            3 => assert!(
+                t.starts_with("i feel ") && neg.contains(&t.rsplit(' ').next().unwrap()),
+                "{t}"
+            ),
             // "good" appears in a rust phrase, but rust has no semantic class to swap within
             2 => assert_eq!(t, "what is good about rust"),
             _ => {}
@@ -437,18 +629,47 @@ fn trained_models_never_mistake_ordinary_requests_for_a_crisis() {
     // Regression: a 251k GRU answered "10 km to miles" with the crisis message. The shipped bot.bin is not in the
     // repository (and the old version of this test silently passed without it), so train a small GRU right here.
     let intents = intents::load();
-    let gru = crate::train::quick_student(&intents, 1.0, crate::train::student_cfg(Arch::Gru, crate::model::tier("nano").unwrap(), intents.len()), 0.75);
+    let gru = crate::train::quick_student(
+        &intents,
+        1.0,
+        crate::train::student_cfg(
+            Arch::Gru,
+            crate::model::tier("nano").unwrap(),
+            intents.len(),
+        ),
+        0.75,
+    );
     let gru_brain = Brain::new(gru, intents);
     let benign = [
-        "10 km to miles", "what is 5+3", "roll 2d6", "set a timer for 5 minutes", "days until 2026-12-25", "add milk to my list", "100 f to c",
-        "and in meters", "what about 5 miles", "double that", "draw a unicorn", "tell me about cargo", "i am interested about you", "12*(3+4)",
-        "what time is it", "my favorite color is teal", "note: buy stamps", "how many days until my birthday", "tell me a space fact", "hello",
+        "10 km to miles",
+        "what is 5+3",
+        "roll 2d6",
+        "set a timer for 5 minutes",
+        "days until 2026-12-25",
+        "add milk to my list",
+        "100 f to c",
+        "and in meters",
+        "what about 5 miles",
+        "double that",
+        "draw a unicorn",
+        "tell me about cargo",
+        "i am interested about you",
+        "12*(3+4)",
+        "what time is it",
+        "my favorite color is teal",
+        "note: buy stamps",
+        "how many days until my birthday",
+        "tell me a space fact",
+        "hello",
     ];
     for (name, brain) in [("gru", &gru_brain), ("bow", real_brain())] {
         let mut s = Session::new(Memory::ephemeral(), false);
         for t in benign {
             let r = brain.reply(&mut s, t);
-            assert_ne!(r.tag, "crisis", "{name}: {t:?} must not trigger the crisis reply");
+            assert_ne!(
+                r.tag, "crisis",
+                "{name}: {t:?} must not trigger the crisis reply"
+            );
         }
     }
 }
@@ -467,8 +688,14 @@ fn again_works_repeatedly() {
 #[test]
 fn names_in_every_shape_the_intent_lists() {
     for (t, want) in [
-        ("my name is alice", "Alice"), ("this is anna", "Anna"), ("its me tom", "Tom"), ("maria here", "Maria"),
-        ("its priya", "Priya"), ("its maria here", "Maria"), ("call me priya", "Priya"), ("hi im olivia", "Olivia"),
+        ("my name is alice", "Alice"),
+        ("this is anna", "Anna"),
+        ("its me tom", "Tom"),
+        ("maria here", "Maria"),
+        ("its priya", "Priya"),
+        ("its maria here", "Maria"),
+        ("call me priya", "Priya"),
+        ("hi im olivia", "Olivia"),
     ] {
         assert_eq!(extract_name(t).as_deref(), Some(want), "{t}");
     }
@@ -481,7 +708,10 @@ fn recall_only_after_a_real_lookup_phrase() {
     let mut m = Memory::ephemeral();
     assert!(try_facts("my hat is red", &mut m).is_some());
     assert!(try_facts("do you like my hat", &mut m).is_none());
-    assert_eq!(try_facts("what is my hat", &mut m).unwrap(), "Your hat is red.");
+    assert_eq!(
+        try_facts("what is my hat", &mut m).unwrap(),
+        "Your hat is red."
+    );
 }
 
 #[test]
@@ -548,7 +778,10 @@ fn games_survive_off_topic_input() {
     say(b, &mut s, "tell me a fun fact about space");
     say(b, &mut s, "what is 2+2");
     let r = say(b, &mut s, "50");
-    assert!(r == "Higher." || r == "Lower." || r.contains("Correct"), "guess ended early: {r}");
+    assert!(
+        r == "Higher." || r == "Lower." || r.contains("Correct"),
+        "guess ended early: {r}"
+    );
 }
 
 #[test]
@@ -573,7 +806,14 @@ fn memory_skips_unfinished_likes_and_cuts_lists_cleanly() {
     // a long likes list drops whole old items, never half a word, and never repeats an item
     let mut m = Memory::ephemeral();
     for item in [
-        "chess", "pizza", "hiking in the mountains", "reading science fiction novels", "playing the electric guitar", "watching old documentaries", "baking sourdough bread", "photography",
+        "chess",
+        "pizza",
+        "hiking in the mountains",
+        "reading science fiction novels",
+        "playing the electric guitar",
+        "watching old documentaries",
+        "baking sourdough bread",
+        "photography",
     ] {
         assert!(try_facts(&format!("i like {item}"), &mut m).is_some());
     }
@@ -583,7 +823,20 @@ fn memory_skips_unfinished_likes_and_cuts_lists_cleanly() {
     assert!(likes.ends_with("photography"), "{likes}");
     assert_eq!(likes.matches("photography").count(), 1, "{likes}");
     for it in likes.split(", ") {
-        assert!(["chess", "pizza", "hiking in the mountains", "reading science fiction novels", "playing the electric guitar", "watching old documentaries", "baking sourdough bread", "photography"].contains(&it), "cut item: {it} in {likes}");
+        assert!(
+            [
+                "chess",
+                "pizza",
+                "hiking in the mountains",
+                "reading science fiction novels",
+                "playing the electric guitar",
+                "watching old documentaries",
+                "baking sourdough bread",
+                "photography"
+            ]
+            .contains(&it),
+            "cut item: {it} in {likes}"
+        );
     }
 }
 
@@ -604,7 +857,10 @@ fn corrupt_model_headers_are_rejected_before_allocating() {
     for v in [8u32, 16, 10, 0] {
         pat.extend_from_slice(&v.to_le_bytes());
     }
-    let at = good.windows(pat.len()).position(|w| w == &pat[..]).expect("net header not found");
+    let at = good
+        .windows(pat.len())
+        .position(|w| w == &pat[..])
+        .expect("net header not found");
     let patch = |dim: u32, bits: u32| {
         let mut b = good.clone();
         b[at + 1..at + 5].copy_from_slice(&dim.to_le_bytes());
@@ -615,7 +871,10 @@ fn corrupt_model_headers_are_rejected_before_allocating() {
     // per-net cap but the file does not contain the rows they claim
     for (dim, bits) in [(512, 16), (256, 15), (128, 14), (2, 16)] {
         std::fs::write(&path, patch(dim, bits)).unwrap();
-        assert!(Ensemble::load(p).is_none(), "accepted dim={dim} bits={bits}");
+        assert!(
+            Ensemble::load(p).is_none(),
+            "accepted dim={dim} bits={bits}"
+        );
     }
 
     // a file over the size cap is refused without being read
@@ -628,7 +887,7 @@ fn corrupt_model_headers_are_rejected_before_allocating() {
 
 #[test]
 fn model_saved_after_teach_is_current_at_next_launch() {
-    use crate::train::{model_is_current, quick_student, student_cfg, Opts};
+    use crate::train::{Opts, model_is_current, quick_student, student_cfg};
     let mut o = Opts::default_opts();
     o.arch = Arch::Bow;
     o.tier = crate::model::tier("nano").unwrap();
@@ -639,18 +898,34 @@ fn model_saved_after_teach_is_current_at_next_launch() {
     let mut n = 0;
     while student_cfg(o.arch, o.tier, intents.len()) == old_cfg {
         n += 1;
-        assert!(n < 400, "student_cfg never changed with the class count; this test no longer exercises the bug");
-        intents.push(intents::Intent { tag: format!("taught_test_{n}"), examples: vec![format!("how is the weather on planet {n}")], responses: vec!["Cold and dusty.".into()], ctx: vec![] });
+        assert!(
+            n < 400,
+            "student_cfg never changed with the class count; this test no longer exercises the bug"
+        );
+        intents.push(intents::Intent {
+            tag: format!("taught_test_{n}"),
+            examples: vec![format!("how is the weather on planet {n}")],
+            responses: vec!["Cold and dusty.".into()],
+            ctx: vec![],
+        });
     }
     let m = quick_student(&intents, 1.0, old_cfg, 0.75);
     let path = std::env::temp_dir().join("tinybot_teach_current.bin");
     let p = path.to_str().unwrap();
     m.save(p).unwrap();
     let loaded = Ensemble::load(p).unwrap();
-    assert!(model_is_current(&loaded, &intents, &o), "a model written after /teach was treated as out of date");
+    assert!(
+        model_is_current(&loaded, &intents, &o),
+        "a model written after /teach was treated as out of date"
+    );
     // genuinely stale models are still caught: another intent was added after the save
     let mut more = intents.clone();
-    more.push(intents::Intent { tag: "taught_test_2".into(), examples: vec!["what is the moon made of".into()], responses: vec!["Rock.".into()], ctx: vec![] });
+    more.push(intents::Intent {
+        tag: "taught_test_2".into(),
+        examples: vec!["what is the moon made of".into()],
+        responses: vec!["Rock.".into()],
+        ctx: vec![],
+    });
     assert!(!model_is_current(&loaded, &more, &o));
     // and so is a model of a different architecture
     let mut gru = o.clone();
@@ -671,7 +946,10 @@ fn art_only_reads_the_words_after_draw_or_sketch() {
     assert!(a.starts_with("Here's a dog:"), "{a}");
     // plain requests and "of" phrasing still work
     assert!(crate::art::draw("draw a cat", &mut r).starts_with("Here's a cat:"));
-    assert!(crate::art::draw("can you sketch me a rocket please", &mut r).starts_with("Here's a rocket:"));
+    assert!(
+        crate::art::draw("can you sketch me a rocket please", &mut r)
+            .starts_with("Here's a rocket:")
+    );
     assert!(crate::art::draw("draw a picture of an owl", &mut r).starts_with("Here's a owl:"));
     assert!(crate::art::draw("ascii art of a fish", &mut r).starts_with("Here's a fish:"));
 }
@@ -680,17 +958,30 @@ fn art_only_reads_the_words_after_draw_or_sketch() {
 fn taught_text_cannot_turn_into_file_syntax() {
     // `@` starts a `>@prev` context reply, so a taught reply like "@john hi" used to be filed as a reply for a
     // previous intent called "john", leaving the new intent with no usable reply (the bot answered "...")
-    for (raw, want) in [("@john hi there", "john hi there"), ("> @john hi there", "john hi there"), (" >> [# @x y", "x y"), ("hello @ world", "hello @ world"), ("@@@", "")] {
+    for (raw, want) in [
+        ("@john hi there", "john hi there"),
+        ("> @john hi there", "john hi there"),
+        (" >> [# @x y", "x y"),
+        ("hello @ world", "hello @ world"),
+        ("@@@", ""),
+    ] {
         assert_eq!(intents::clean_line(raw), want, "{raw:?}");
     }
     // and whatever is already sitting in a learned.txt written by the old version still answers
     let mut v = intents::load();
-    intents::parse("[taught_old]\nwhat is the secret word\n> @john hi there\n\n[taught_empty]\nsay nothing\n", &mut v);
+    intents::parse(
+        "[taught_old]\nwhat is the secret word\n> @john hi there\n\n[taught_empty]\nsay nothing\n",
+        &mut v,
+    );
     let (tags, ex) = intents::flatten(&v);
     let t = Ensemble::train(&ex, tags, &[TINY, TINY], 1, 1.0, 0);
     let b = Brain::new(Ensemble::distill(&t, &ex, TINY, 1, 1.0, 0), v);
     let mut s = Session::new(Memory::ephemeral(), false);
-    let (text, _) = b.answer(&mut s, b.tag_idx("taught_old").unwrap(), "what is the secret word");
+    let (text, _) = b.answer(
+        &mut s,
+        b.tag_idx("taught_old").unwrap(),
+        "what is the secret word",
+    );
     assert_eq!(text, "hi there");
     let (text, _) = b.answer(&mut s, b.tag_idx("taught_empty").unwrap(), "say nothing");
     assert!(text.contains("don't have a reply"), "{text}");
@@ -715,7 +1006,14 @@ fn model_choice_parsing() {
 fn switching_models_builds_saves_loads_and_swaps() {
     use crate::cmds::App;
     use crate::model::tier;
-    const TINY_CNN: Cfg = Cfg { arch: Arch::Cnn, dim: 8, hid: 16, bits: 10, ch: 4, epochs: 2 };
+    const TINY_CNN: Cfg = Cfg {
+        arch: Arch::Cnn,
+        dim: 8,
+        hid: 16,
+        bits: 10,
+        ch: 4,
+        epochs: 2,
+    };
     let cnn_app = |dir: &std::path::Path| {
         let intents = intents::load();
         let (tags, ex) = intents::flatten(&intents);
@@ -736,27 +1034,75 @@ fn switching_models_builds_saves_loads_and_swaps() {
     let lines = app.start_switch(Arch::Bow, nano);
     assert!(lines[0].contains("isn't built yet"), "{lines:?}");
     assert!(app.retraining() && app.busy_label() == "switching model");
-    assert!(app.start_switch(Arch::Gru, nano)[0].contains("busy"), "a second request is refused, not queued");
+    assert!(
+        app.start_switch(Arch::Gru, nano)[0].contains("busy"),
+        "a second request is refused, not queued"
+    );
     let msg = app.wait_retrain().expect("switch finishes");
     assert!(msg.contains("now running bow-nano"), "{msg}");
     assert_eq!(app.current_choice(), (Arch::Bow, nano));
     assert!(dir.join("bow-nano.bin").exists());
-    assert!(app.model_path.ends_with("bow-nano.bin"), "relearning must overwrite the model that is running");
+    assert!(
+        app.model_path.ends_with("bow-nano.bin"),
+        "relearning must overwrite the model that is running"
+    );
     assert!(!app.retraining());
     let mut s = Session::new(crate::skills::Memory::default(), false);
     assert!(app.brain.reply(&mut s, "what is 2+2").text.contains('4'));
     let r = crate::cmds::run(&mut app, "/model");
-    assert!(r.lines.iter().any(|l| l.contains("[bow-nano]")), "{:?}", r.lines);
+    assert!(
+        r.lines.iter().any(|l| l.contains("[bow-nano]")),
+        "{:?}",
+        r.lines
+    );
 
     // a fresh session finds that file and loads it instead of building it again
     let mut app2 = cnn_app(&dir);
     let lines = app2.start_switch(Arch::Bow, nano);
     assert!(lines[0].contains("loading"), "{lines:?}");
-    assert!(app2.wait_retrain().unwrap().contains("now running bow-nano"));
+    assert!(
+        app2.wait_retrain()
+            .unwrap()
+            .contains("now running bow-nano")
+    );
 
     // the slash command reports bad input without switching
     let r = crate::cmds::run(&mut app2, "/model nope");
     assert!(r.lines[0].contains("don't know"), "{:?}", r.lines);
     assert!(!app2.retraining());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_model_older_than_learned_phrases_is_kept_not_thrown_away() {
+    use crate::train::{Found, Opts, find_model, quick_student, student_cfg};
+    let mut o = Opts::default_opts();
+    o.arch = Arch::Bow;
+    o.tier = crate::model::tier("nano").unwrap();
+    let mut intents = intents::load();
+    let m = quick_student(
+        &intents,
+        1.0,
+        student_cfg(o.arch, o.tier, intents.len()),
+        0.75,
+    );
+    let path = std::env::temp_dir().join("tinybot_find_model.bin");
+    let p = path.to_str().unwrap();
+    m.save(p).unwrap();
+    assert!(matches!(find_model(p, &intents, &o), Found::Current(_)));
+    intents[0]
+        .examples
+        .push("a phrase taught after the model was saved".into());
+    assert!(matches!(find_model(p, &intents, &o), Found::Stale(_)));
+    intents.push(intents::Intent {
+        tag: "taught_find_model".into(),
+        examples: vec!["x y z".into()],
+        responses: vec!["ok".into()],
+        ctx: vec![],
+    });
+    assert!(matches!(find_model(p, &intents, &o), Found::Reshaped(_)));
+    let mut gru = o.clone();
+    gru.arch = Arch::Gru;
+    assert!(matches!(find_model(p, &intents, &gru), Found::Missing));
+    let _ = std::fs::remove_file(path);
 }

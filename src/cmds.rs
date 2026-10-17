@@ -3,7 +3,7 @@
 
 use crate::bot::{Brain, Session};
 use crate::intents;
-use crate::model::{Arch, Ensemble, Tier, TIERS};
+use crate::model::{Arch, TIERS, Tier};
 use crate::train::{self, MODEL_PATH};
 use std::sync::mpsc;
 use std::time::Instant;
@@ -13,7 +13,7 @@ pub struct App {
     pub s: Session,
     /// columns available for multi-column output like /dex
     pub width: usize,
-    retrain_rx: Option<mpsc::Receiver<(Brain, String)>>,
+    retrain_rx: Option<mpsc::Receiver<(Brain, String, bool)>>,
     retrain_again: bool,
     /// set while a model switch (rather than a relearn) is running: the file the new brain will live in
     pending_path: Option<String>,
@@ -25,7 +25,16 @@ pub struct App {
 
 impl App {
     pub fn new(brain: Brain, s: Session) -> App {
-        App { brain, s, width: 80, retrain_rx: None, retrain_again: false, pending_path: None, model_path: MODEL_PATH.to_string(), models_dir: "models".to_string() }
+        App {
+            brain,
+            s,
+            width: 80,
+            retrain_rx: None,
+            retrain_again: false,
+            pending_path: None,
+            model_path: MODEL_PATH.to_string(),
+            models_dir: "models".to_string(),
+        }
     }
 
     pub fn retraining(&self) -> bool {
@@ -34,12 +43,19 @@ impl App {
 
     /// What the background thread is doing, for the header spinner.
     pub fn busy_label(&self) -> &'static str {
-        if self.pending_path.is_some() { "switching model" } else { "learning" }
+        if self.pending_path.is_some() {
+            "switching model"
+        } else {
+            "learning"
+        }
     }
 
     /// The architecture and size tier of the brain that is answering right now.
     pub fn current_choice(&self) -> (Arch, &'static Tier) {
-        (self.brain.model.cfg().arch, train::model_tier(&self.brain.model))
+        (
+            self.brain.model.cfg().arch,
+            train::model_tier(&self.brain.model),
+        )
     }
 
     /// Switch to another architecture and size without restarting. A model that is already on disk (`bot.bin` for
@@ -50,44 +66,70 @@ impl App {
         let name = format!("{}-{}", arch.name(), tier.name);
         let (ca, ct) = self.current_choice();
         if self.retrain_rx.is_some() {
-            return vec!["I'm still busy learning or switching in the background. Try again in a moment.".into()];
+            return vec![
+                "I'm still busy learning or switching in the background. Try again in a moment."
+                    .into(),
+            ];
         }
         if (ca, ct.name) == (arch, tier.name) {
             return vec![format!("already running {name}")];
         }
-        let o = train::Opts { arch, tier, ..train::Opts::default_opts() };
-        let path = if o.is_default() { MODEL_PATH.to_string() } else { format!("{}/{}.bin", self.models_dir, name) };
-        let built = std::path::Path::new(&path).exists();
+        let o = train::Opts {
+            arch,
+            tier,
+            ..train::Opts::default_opts()
+        };
+        let path = if o.is_default() {
+            MODEL_PATH.to_string()
+        } else {
+            format!("{}/{}.bin", self.models_dir, name)
+        };
+        let intents = intents::load();
+        // loading a file takes milliseconds, so look now and tell the truth about what is about to happen
+        let found = train::find_model(&path, &intents, &o);
+        let lines = match &found {
+            train::Found::Current(_) => vec![format!("loading {name} ...")],
+            train::Found::Stale(_) => vec![format!(
+                "loading {name} now; it predates your latest teaching, so I'll refresh it in the background."
+            )],
+            train::Found::Reshaped(_) => vec![format!(
+                "{name} was built for different intents, so I'm rebuilding it in the background."
+            )],
+            train::Found::Missing => vec![
+                format!(
+                    "{name} isn't built yet, so I'm building it in the background (a minute or two, longer for the big ones)."
+                ),
+                "Keep chatting: I'll switch when it's ready, and it's saved for next time.".into(),
+            ],
+        };
         let (tx, rx) = mpsc::channel();
         let target = path.clone();
         let done_name = name.clone();
         std::thread::spawn(move || {
             let t0 = Instant::now();
-            let intents = intents::load();
-            let m = match Ensemble::load(&target) {
-                Some(m) if train::model_is_current(&m, &intents, &o) => m,
+            let (m, refresh) = match found {
+                train::Found::Current(m) => (m, false),
+                train::Found::Stale(m) => (m, true),
                 _ => {
                     let m = train::build_quiet(&intents, arch, tier);
                     if let Some(dir) = std::path::Path::new(&target).parent() {
                         let _ = std::fs::create_dir_all(dir);
                     }
                     let _ = m.save(&target);
-                    m
+                    (m, false)
                 }
             };
-            let msg = format!("now running {done_name} ({} params, {:.0} KB, ready in {:.1?})", train::params_label(&m), train::model_kb(&m), t0.elapsed());
-            let _ = tx.send((Brain::new(m, intents), msg));
+            let msg = format!(
+                "now running {done_name} ({} params, {:.0} KB, ready in {:.1?})",
+                train::params_label(&m),
+                train::model_kb(&m),
+                t0.elapsed()
+            );
+            let _ = tx.send((Brain::new(m, intents), msg, refresh));
         });
         self.retrain_rx = Some(rx);
         self.pending_path = Some(path);
-        if built {
-            vec![format!("loading {name} ...")]
-        } else {
-            vec![
-                format!("{name} isn't built yet, so I'm building it in the background (a minute or two, longer for the big ones)."),
-                "Keep chatting: I'll switch when it's ready, and it's saved for next time.".into(),
-            ]
-        }
+        lines
     }
     /// Relearn from intents.txt + learned.txt on a background thread (~10-30 s on one core),
     /// so the UI keeps animating. A second request while one is running queues exactly one more.
@@ -96,7 +138,11 @@ impl App {
             self.retrain_again = true;
             return;
         }
-        let (temp, scfg, clarify) = (self.brain.model.temp, self.brain.model.cfg(), self.brain.model.clarify_sim);
+        let (temp, scfg, clarify) = (
+            self.brain.model.temp,
+            self.brain.model.cfg(),
+            self.brain.model.clarify_sim,
+        );
         let save_to = self.model_path.clone();
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
@@ -104,7 +150,11 @@ impl App {
             let intents = intents::load();
             let m = train::quick_student(&intents, temp, scfg, clarify);
             let _ = m.save(&save_to);
-            let _ = tx.send((Brain::new(m, intents), format!("relearned in {:.1?}", t0.elapsed())));
+            let _ = tx.send((
+                Brain::new(m, intents),
+                format!("relearned in {:.1?}", t0.elapsed()),
+                false,
+            ));
         });
         self.retrain_rx = Some(rx);
     }
@@ -118,18 +168,22 @@ impl App {
         };
         self.retrain_rx = None;
         let switching = self.pending_path.take();
+        let mut refresh = false;
         let msg = match res {
-            Some((b, msg)) => {
+            Some((b, msg, r)) => {
                 self.brain = b;
+                refresh = r;
                 if let Some(p) = switching {
                     self.model_path = p; // relearning now overwrites the file of the model that is actually running
                 }
                 msg
             }
-            None if switching.is_some() => "switching models failed, still on the old one".to_string(),
+            None if switching.is_some() => {
+                "switching models failed, still on the old one".to_string()
+            }
             None => "relearning failed".to_string(),
         };
-        if std::mem::take(&mut self.retrain_again) {
+        if std::mem::take(&mut self.retrain_again) || refresh {
             self.start_retrain();
         }
         Some(msg)
@@ -191,10 +245,16 @@ fn bar(frac: f32, w: usize) -> String {
 }
 
 /// "gru large", "large gru", "gru-large", "cnn" or "small": a part you leave out keeps its current value.
-pub fn parse_model_choice(arg: &str, cur: (Arch, &'static Tier)) -> Result<(Arch, &'static Tier), String> {
+pub fn parse_model_choice(
+    arg: &str,
+    cur: (Arch, &'static Tier),
+) -> Result<(Arch, &'static Tier), String> {
     let (mut arch, mut tier) = cur;
     let mut any = false;
-    for w in arg.split(|c: char| c.is_whitespace() || matches!(c, '-' | '/' | ',' | '+')).filter(|w| !w.is_empty()) {
+    for w in arg
+        .split(|c: char| c.is_whitespace() || matches!(c, '-' | '/' | ',' | '+'))
+        .filter(|w| !w.is_empty())
+    {
         any = true;
         if let Some(a) = Arch::parse(w) {
             arch = a;
@@ -204,19 +264,32 @@ pub fn parse_model_choice(arg: &str, cur: (Arch, &'static Tier)) -> Result<(Arch
             return Err(format!("I don't know a model part called {w:?}."));
         }
     }
-    if any { Ok((arch, tier)) } else { Err("say which model, for example /model gru large.".into()) }
+    if any {
+        Ok((arch, tier))
+    } else {
+        Err("say which model, for example /model gru large.".into())
+    }
 }
 
 pub fn run(app: &mut App, line: &str) -> Out {
     let cmd = line.trim_start_matches('/');
-    let (name, arg) = cmd.split_once(' ').map(|(a, b)| (a, b.trim())).unwrap_or((cmd, ""));
+    let (name, arg) = cmd
+        .split_once(' ')
+        .map(|(a, b)| (a, b.trim()))
+        .unwrap_or((cmd, ""));
     let (brain, s) = (&mut app.brain, &mut app.s);
     match name {
-        "quit" | "exit" | "q" => Out { lines: vec!["bye!".into()], quit: true },
+        "quit" | "exit" | "q" => Out {
+            lines: vec!["bye!".into()],
+            quit: true,
+        },
         "help" | "?" => out(HELP.iter().map(|x| x.to_string()).collect()),
         "debug" => {
             s.debug = !s.debug;
-            out(vec![format!("debug {}", if s.debug { "on" } else { "off" })])
+            out(vec![format!(
+                "debug {}",
+                if s.debug { "on" } else { "off" }
+            )])
         }
         "forget" => {
             s.mem.clear();
@@ -224,34 +297,80 @@ pub fn run(app: &mut App, line: &str) -> Out {
             out(vec!["memory wiped (facts, list, XP and dex)".into()])
         }
         "clear" => out(vec![]),
-        "memory" => out(match crate::skills::try_about_me("what do you know about me", &s.mem) {
-            Some(t) => t.lines().map(String::from).collect(),
-            None => vec![],
-        }),
+        "memory" => out(
+            match crate::skills::try_about_me("what do you know about me", &s.mem) {
+                Some(t) => t.lines().map(String::from).collect(),
+                None => vec![],
+            },
+        ),
         "notes" => out(if s.mem.notes.is_empty() {
             vec!["no notes yet, try: note: buy stamps".into()]
         } else {
-            s.mem.notes.iter().enumerate().map(|(i, n)| format!("{}. {n}", i + 1)).collect()
+            s.mem
+                .notes
+                .iter()
+                .enumerate()
+                .map(|(i, n)| format!("{}. {n}", i + 1))
+                .collect()
         }),
         "timers" => out(match s.next_timer() {
-            Some((d, l)) => vec![format!("next: {} {l}", crate::skills::fmt_dur(d.as_secs())), format!("{} running", s.timers.len())],
+            Some((d, l)) => vec![
+                format!("next: {} {l}", crate::skills::fmt_dur(d.as_secs())),
+                format!("{} running", s.timers.len()),
+            ],
             None => vec!["no timers running".into()],
         }),
         "facts" => {
-            let mut v = vec![format!("fact book: {}/{} collected", s.persona.factbook.len(), brain.facts.items.len())];
+            let mut v = vec![format!(
+                "fact book: {}/{} collected",
+                s.persona.factbook.len(),
+                brain.facts.items.len()
+            )];
             for c in brain.facts.categories() {
                 let all: Vec<_> = brain.facts.items.iter().filter(|f| f.cat == c).collect();
-                let got = all.iter().filter(|f| s.persona.factbook.contains(&f.id)).count();
-                v.push(format!("{c:<9} [{}{}] {got}/{}", "#".repeat(got), ".".repeat(all.len() - got), all.len()));
+                let got = all
+                    .iter()
+                    .filter(|f| s.persona.factbook.contains(&f.id))
+                    .count();
+                v.push(format!(
+                    "{c:<9} [{}{}] {got}/{}",
+                    "#".repeat(got),
+                    ".".repeat(all.len() - got),
+                    all.len()
+                ));
             }
             out(v)
         }
-        "intents" => out(brain.intents.iter().map(|it| format!("{:<18} {} phrases", it.tag, it.examples.len())).collect()),
+        "intents" => out(brain
+            .intents
+            .iter()
+            .map(|it| format!("{:<18} {} phrases", it.tag, it.examples.len()))
+            .collect()),
         "dex" => {
             let per_row = (app.width / 17).max(1);
-            let mut v = vec![format!("intent dex: {}/{} discovered", s.persona.dex.len(), brain.intents.len())];
+            let mut v = vec![format!(
+                "intent dex: {}/{} discovered",
+                s.persona.dex.len(),
+                brain.intents.len()
+            )];
             for chunk in brain.intents.chunks(per_row) {
-                v.push(chunk.iter().map(|it| format!("{:<17}", if s.persona.dex.contains(&it.tag) { it.tag.as_str() } else { "???" })).collect::<String>().trim_end().to_string());
+                v.push(
+                    chunk
+                        .iter()
+                        .map(|it| {
+                            format!(
+                                "{:<17}",
+                                if s.persona.dex.contains(&it.tag) {
+                                    it.tag.as_str()
+                                } else {
+                                    "???"
+                                }
+                            )
+                        })
+                        .collect::<String>()
+                        .trim_end()
+                        .to_string(),
+                );
             }
             out(v)
         }
@@ -259,12 +378,35 @@ pub fn run(app: &mut App, line: &str) -> Out {
             let p = &s.persona;
             let (a, b) = p.progress();
             let (us, _) = train::bench(&brain.model);
-            let badges = if p.badges.is_empty() { "none yet".to_string() } else { p.badges.iter().cloned().collect::<Vec<_>>().join(", ") };
+            let badges = if p.badges.is_empty() {
+                "none yet".to_string()
+            } else {
+                p.badges.iter().cloned().collect::<Vec<_>>().join(", ")
+            };
             out(vec![
-                format!("level {} {}  [{}] {a}/{b} XP", p.level(), p.title(), bar(a as f32 / b as f32, 12)),
-                format!("{} messages, {}-day streak, {} game wins, mood {}", p.msgs, p.streak, p.wins, p.mood_label()),
-                format!("dex {}/{}, badges: {badges}", p.dex.len(), brain.intents.len()),
-                format!("model: {} params, {:.0} KB on disk, {us:.0} us/query", train::params_label(&brain.model), train::model_kb(&brain.model)),
+                format!(
+                    "level {} {}  [{}] {a}/{b} XP",
+                    p.level(),
+                    p.title(),
+                    bar(a as f32 / b as f32, 12)
+                ),
+                format!(
+                    "{} messages, {}-day streak, {} game wins, mood {}",
+                    p.msgs,
+                    p.streak,
+                    p.wins,
+                    p.mood_label()
+                ),
+                format!(
+                    "dex {}/{}, badges: {badges}",
+                    p.dex.len(),
+                    brain.intents.len()
+                ),
+                format!(
+                    "model: {} params, {:.0} KB on disk, {us:.0} us/query",
+                    train::params_label(&brain.model),
+                    train::model_kb(&brain.model)
+                ),
             ])
         }
         "history" => {
@@ -272,13 +414,31 @@ pub fn run(app: &mut App, line: &str) -> Out {
                 return out(vec!["nothing yet".into()]);
             }
             let skip = s.history.len().saturating_sub(10);
-            out(s.history.iter().skip(skip).map(|t| format!("you: {}  |  bot[{}]: {}", t.user, t.tag, t.bot.chars().take(60).collect::<String>())).collect())
+            out(s
+                .history
+                .iter()
+                .skip(skip)
+                .map(|t| {
+                    format!(
+                        "you: {}  |  bot[{}]: {}",
+                        t.user,
+                        t.tag,
+                        t.bot.chars().take(60).collect::<String>()
+                    )
+                })
+                .collect())
         }
         "why" => match s.last_input.clone() {
             Some(t) => {
                 let mut ex = brain.explain(&t);
                 ex.sort_by(|a, b| b.1.total_cmp(&a.1));
-                out(vec![format!("word influence: {}", ex.iter().map(|(w, d)| format!("{w} ({d:+.2})")).collect::<Vec<_>>().join("  "))])
+                out(vec![format!(
+                    "word influence: {}",
+                    ex.iter()
+                        .map(|(w, d)| format!("{w} ({d:+.2})"))
+                        .collect::<Vec<_>>()
+                        .join("  ")
+                )])
             }
             None => out(vec!["nothing to explain yet".into()]),
         },
@@ -292,12 +452,37 @@ pub fn run(app: &mut App, line: &str) -> Out {
         "model" => {
             let c = brain.model.cfg();
             let now = format!("{}-{}", c.arch.name(), train::model_tier(&brain.model).name);
-            let mut built: Vec<String> = std::fs::read_dir(&app.models_dir).map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().trim_end_matches(".bin").to_string()).collect()).unwrap_or_default();
+            let mut built: Vec<String> = std::fs::read_dir(&app.models_dir)
+                .map(|d| {
+                    d.filter_map(|e| e.ok())
+                        .map(|e| {
+                            e.file_name()
+                                .to_string_lossy()
+                                .trim_end_matches(".bin")
+                                .to_string()
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             if std::path::Path::new(MODEL_PATH).exists() && !built.iter().any(|b| b == "gru-base") {
                 built.push("gru-base".into());
             }
             built.sort();
-            let built = if built.is_empty() { "none yet".to_string() } else { built.iter().map(|b| if *b == now { format!("[{b}]") } else { b.clone() }).collect::<Vec<_>>().join(" ") };
+            let built = if built.is_empty() {
+                "none yet".to_string()
+            } else {
+                built
+                    .iter()
+                    .map(|b| {
+                        if *b == now {
+                            format!("[{b}]")
+                        } else {
+                            b.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
             out(vec![
                 format!("{} ({})", train::model_name(&brain.model), c.tag()),
                 format!("{} params allocated, {} trained, {:.0} KB on disk", train::params_label(&brain.model), train::fmt_params(brain.model.param_report().2), train::model_kb(&brain.model)),
@@ -309,20 +494,29 @@ pub fn run(app: &mut App, line: &str) -> Out {
         }
         "bench" => {
             let (us, qps) = train::bench(&brain.model);
-            out(vec![format!("{us:.1} us/query ({qps:.0} queries/s) with {} params", train::params_label(&brain.model))])
+            out(vec![format!(
+                "{us:.1} us/query ({qps:.0} queries/s) with {} params",
+                train::params_label(&brain.model)
+            )])
         }
         "fix" | "teach" if arg.contains("=>") => {
             let (p, r) = arg.split_once("=>").unwrap_or(("", ""));
             if intents::clean_line(p).is_empty() || intents::clean_line(r).is_empty() {
-                return out(vec!["usage: /teach how is the weather on mars => Cold and dusty.".into()]);
+                return out(vec![
+                    "usage: /teach how is the weather on mars => Cold and dusty.".into(),
+                ]);
             }
             let existing = intents::load();
-            let n = (1..).find(|n| !existing.iter().any(|i| i.tag == format!("taught_{n}"))).unwrap_or(1);
+            let n = (1..)
+                .find(|n| !existing.iter().any(|i| i.tag == format!("taught_{n}")))
+                .unwrap_or(1);
             let tag = format!("taught_{n}");
             let _ = intents::append_learned(&tag, p, Some(r));
             let mut toasts = Vec::new();
             s.persona.add_xp(15, &mut toasts);
-            let mut lines = vec![format!("ok, new intent {tag}: learning in the background, +15 XP")];
+            let mut lines = vec![format!(
+                "ok, new intent {tag}: learning in the background, +15 XP"
+            )];
             lines.extend(toasts);
             app.start_retrain();
             out(lines)
@@ -330,7 +524,9 @@ pub fn run(app: &mut App, line: &str) -> Out {
         "fix" | "teach" => match (brain.tag_idx(arg), s.last_input.clone()) {
             (Some(_), Some(t)) => {
                 let _ = intents::append_learned(arg, &t, None);
-                let mut lines = vec![format!("learned: {t:?} -> {arg} (learning in the background, +10 XP; /unlearn undoes it)")];
+                let mut lines = vec![format!(
+                    "learned: {t:?} -> {arg} (learning in the background, +10 XP; /unlearn undoes it)"
+                )];
                 s.persona.add_xp(10, &mut lines);
                 app.start_retrain();
                 out(lines)
@@ -345,7 +541,10 @@ pub fn run(app: &mut App, line: &str) -> Out {
         "unlearn" => match intents::unlearn_last() {
             Some(removed) => {
                 app.start_retrain();
-                out(vec![format!("removed: {removed}"), "relearning in the background".into()])
+                out(vec![
+                    format!("removed: {removed}"),
+                    "relearning in the background".into(),
+                ])
             }
             None => out(vec!["nothing learned yet".into()]),
         },
@@ -368,19 +567,29 @@ pub fn run(app: &mut App, line: &str) -> Out {
         }
         "tz" => {
             if arg.is_empty() {
-                return out(vec![format!("time zone: {} (set one with /tz +5:30, or /tz auto)", crate::skills::tz_label())]);
+                return out(vec![format!(
+                    "time zone: {} (set one with /tz +5:30, or /tz auto)",
+                    crate::skills::tz_label()
+                )]);
             }
             if arg == "auto" {
                 crate::skills::set_tz_override(None);
                 s.mem.facts.remove("_tz");
                 s.mem.save();
-                return out(vec![format!("time zone: auto ({})", crate::skills::tz_label())]);
+                return out(vec![format!(
+                    "time zone: auto ({})",
+                    crate::skills::tz_label()
+                )]);
             }
             match crate::skills::parse_tz(arg) {
                 Some(m) => {
                     crate::skills::set_tz_override(Some(m));
                     s.mem.set("_tz", &m.to_string());
-                    out(vec![format!("time zone set to {} ({})", crate::skills::tz_label(), crate::skills::clock())])
+                    out(vec![format!(
+                        "time zone set to {} ({})",
+                        crate::skills::tz_label(),
+                        crate::skills::clock()
+                    )])
                 }
                 None => out(vec!["couldn't read that, try /tz +5:30 or /tz -8".into()]),
             }
@@ -388,9 +597,14 @@ pub fn run(app: &mut App, line: &str) -> Out {
         "know" => match arg.split_once("=>") {
             Some((topic, text)) if crate::kb::append_user(topic, text) => {
                 brain.reload_kb();
-                out(vec![format!("ok, saved. I can look up {} topics now (no retraining needed)", brain.kb.len())])
+                out(vec![format!(
+                    "ok, saved. I can look up {} topics now (no retraining needed)",
+                    brain.kb.len()
+                )])
             }
-            _ => out(vec!["usage: /know octopus => Octopuses have three hearts.".into()]),
+            _ => out(vec![
+                "usage: /know octopus => Octopuses have three hearts.".into(),
+            ]),
         },
         _ => out(vec!["unknown command, try /help".into()]),
     }

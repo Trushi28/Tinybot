@@ -2,7 +2,7 @@
 //! augmentation, calibration, cross-validation, and the architecture x size sweep.
 
 use crate::intents::{self, Intent};
-use crate::model::{self, argmax, decide, Arch, Cfg, Decision, Ensemble, Tier, TIERS};
+use crate::model::{self, Arch, Cfg, Decision, Ensemble, TIERS, Tier, argmax, decide};
 use crate::rng::Rng;
 use crate::text::{class_for_intent, class_members, noise};
 use std::collections::HashMap;
@@ -33,6 +33,32 @@ pub struct Opts {
     pub folds: Vec<usize>,
     pub archs: Vec<Arch>,
     pub tiers: Vec<&'static Tier>,
+}
+
+pub enum Found {
+    Current(Ensemble),
+    Stale(Ensemble),
+    Reshaped(Ensemble),
+    Missing,
+}
+
+pub fn find_model(path: &str, intents: &[Intent], o: &Opts) -> Found {
+    let Some(m) = Ensemble::load(path) else {
+        return Found::Missing;
+    };
+    if model_is_current(&m, intents, o) {
+        return Found::Current(m);
+    }
+    if m.cfg().arch != o.arch {
+        return Found::Missing;
+    }
+    let same =
+        m.tags.len() == intents.len() && m.tags.iter().zip(intents).all(|(t, i)| *t == i.tag);
+    if same {
+        Found::Stale(m)
+    } else {
+        Found::Reshaped(m)
+    }
 }
 
 impl Opts {
@@ -68,12 +94,20 @@ impl Opts {
                     i += 1;
                 }
                 "--teacher" => {
-                    o.teacher = if val == "bow" { TeacherKind::Bow } else { TeacherKind::Het };
+                    o.teacher = if val == "bow" {
+                        TeacherKind::Bow
+                    } else {
+                        TeacherKind::Het
+                    };
                     i += 1;
                 }
                 "--no-aug" => o.aug = false,
                 "--folds" => {
-                    o.folds = val.split(',').filter_map(|x| x.parse().ok()).filter(|f| *f < 5).collect();
+                    o.folds = val
+                        .split(',')
+                        .filter_map(|x| x.parse().ok())
+                        .filter(|f| *f < 5)
+                        .collect();
                     i += 1;
                 }
                 "--archs" => {
@@ -117,7 +151,11 @@ pub fn split(intents: &[Intent], fold: usize) -> (Examples, Examples) {
     let (mut tr, mut val) = (Vec::new(), Vec::new());
     for (k, it) in intents.iter().enumerate() {
         for (i, ex) in it.examples.iter().enumerate() {
-            let dest = if it.examples.len() >= 6 && i % 5 == fold { &mut val } else { &mut tr };
+            let dest = if it.examples.len() >= 6 && i % 5 == fold {
+                &mut val
+            } else {
+                &mut tr
+            };
             dest.push((k, ex.clone()));
         }
     }
@@ -132,10 +170,14 @@ pub fn augment(ex: &Examples, tags: &[String], seed: u64) -> Examples {
     let mut out = ex.clone();
     let mut seen: std::collections::HashSet<(usize, String)> = ex.iter().cloned().collect();
     for (k, t) in ex {
-        let Some(class) = tags.get(*k).and_then(|tag| class_for_intent(tag)) else { continue };
+        let Some(class) = tags.get(*k).and_then(|tag| class_for_intent(tag)) else {
+            continue;
+        };
         let members = class_members(class);
         let ws: Vec<&str> = t.split_whitespace().collect();
-        let cands: Vec<usize> = (0..ws.len()).filter(|&i| members.contains(&ws[i].to_lowercase().as_str())).collect();
+        let cands: Vec<usize> = (0..ws.len())
+            .filter(|&i| members.contains(&ws[i].to_lowercase().as_str()))
+            .collect();
         if cands.is_empty() {
             continue;
         }
@@ -144,7 +186,11 @@ pub fn augment(ex: &Examples, tags: &[String], seed: u64) -> Examples {
             let cur = ws[i].to_lowercase();
             let others: Vec<&str> = members.iter().copied().filter(|m| *m != cur).collect();
             let r: &str = others[rng.below(others.len())];
-            let new: Vec<&str> = ws.iter().enumerate().map(|(j, w)| if j == i { r } else { *w }).collect();
+            let new: Vec<&str> = ws
+                .iter()
+                .enumerate()
+                .map(|(j, w)| if j == i { r } else { *w })
+                .collect();
             let new = new.join(" ");
             if seen.insert((*k, new.clone())) {
                 out.push((*k, new));
@@ -170,7 +216,11 @@ pub fn model_kb(m: &Ensemble) -> f32 {
 }
 
 pub fn fmt_params(n: usize) -> String {
-    if n >= 1_000_000 { format!("{:.2}M", n as f32 / 1e6) } else { format!("{:.0}k", n as f32 / 1e3) }
+    if n >= 1_000_000 {
+        format!("{:.2}M", n as f32 / 1e6)
+    } else {
+        format!("{:.0}k", n as f32 / 1e3)
+    }
 }
 
 /// "gru base, 253k params" style label for UIs
@@ -180,7 +230,10 @@ pub fn params_label(m: &Ensemble) -> String {
 
 /// The size tier a model was built for: the one whose parameter target is nearest to its size.
 pub fn model_tier(m: &Ensemble) -> &'static Tier {
-    TIERS.iter().min_by_key(|t| (t.target as i64 - m.nominal_params() as i64).abs()).unwrap_or(&TIERS[0])
+    TIERS
+        .iter()
+        .min_by_key(|t| (t.target as i64 - m.nominal_params() as i64).abs())
+        .unwrap_or(&TIERS[0])
 }
 
 pub fn model_name(m: &Ensemble) -> String {
@@ -203,12 +256,30 @@ fn teacher_list(kind: TeacherKind) -> Vec<Cfg> {
 }
 
 const OOD: [&str; 24] = [
-    "explain quantum entanglement", "order me a pizza", "what is the capital of france", "translate this into spanish",
-    "who won the football match", "play some music", "book a flight to paris", "what is the meaning of life",
-    "how do i cook pasta", "write me a poem about the sea", "turn off the lights", "call my mom",
-    "send an email to john", "what is the stock price of apple", "show me pictures of cats", "how tall is mount everest",
-    "recommend a movie", "define photosynthesis", "who is the president", "how do i reset my router password",
-    "what is a black hole", "sing me a song", "open the pod bay doors", "install linux on my laptop",
+    "explain quantum entanglement",
+    "order me a pizza",
+    "what is the capital of france",
+    "translate this into spanish",
+    "who won the football match",
+    "play some music",
+    "book a flight to paris",
+    "what is the meaning of life",
+    "how do i cook pasta",
+    "write me a poem about the sea",
+    "turn off the lights",
+    "call my mom",
+    "send an email to john",
+    "what is the stock price of apple",
+    "show me pictures of cats",
+    "how tall is mount everest",
+    "recommend a movie",
+    "define photosynthesis",
+    "who is the president",
+    "how do i reset my router password",
+    "what is a black hole",
+    "sing me a song",
+    "open the pod bay doors",
+    "install linux on my laptop",
 ];
 
 fn dot(a: &[f32], b: &[f32]) -> f32 {
@@ -230,7 +301,10 @@ pub fn calibrate_clarify(m: &mut Ensemble, train: &Examples, val: &Examples) {
     let idx: Vec<(usize, Vec<f32>)> = train.iter().map(|(k, t)| (*k, m.embed(t))).collect();
     let nearest = |m: &Ensemble, text: &str, k: usize| -> f32 {
         let q = m.embed(text);
-        idx.iter().filter(|(c, _)| *c == k).map(|(_, e)| dot(&q, e) / n).fold(-1.0, f32::max)
+        idx.iter()
+            .filter(|(c, _)| *c == k)
+            .map(|(_, e)| dot(&q, e) / n)
+            .fold(-1.0, f32::max)
     };
     let (mut s_in, mut s_out) = (Vec::new(), Vec::new());
     for (y, t) in val {
@@ -250,12 +324,23 @@ pub fn calibrate_clarify(m: &mut Ensemble, train: &Examples, val: &Examples) {
 
 /// Full build on all data: returns (teacher, student). Temperature and clarify threshold are fitted on
 /// a held-out split first, then everything is retrained on all phrases.
-pub fn build(intents: &[Intent], scfg: Cfg, kind: TeacherKind, aug: bool, verbose: bool, show_misses: bool) -> (Ensemble, Ensemble) {
+pub fn build(
+    intents: &[Intent],
+    scfg: Cfg,
+    kind: TeacherKind,
+    aug: bool,
+    verbose: bool,
+    show_misses: bool,
+) -> (Ensemble, Ensemble) {
     let (tags, all) = intents::flatten(intents);
     let (tr, val) = split(intents, 4);
     let t0 = Instant::now();
     let salt = model::cfg_salt(&scfg);
-    let tr_aug = if aug { augment(&tr, &tags, SEED) } else { tr.clone() };
+    let tr_aug = if aug {
+        augment(&tr, &tags, SEED)
+    } else {
+        tr.clone()
+    };
     let mut t = Ensemble::train(&tr_aug, tags.clone(), &teacher_list(kind), SEED, 1.0, 0);
     t.fit_temp(&val);
     let mut s = Ensemble::distill(&t, &tr_aug, scfg, SEED, 1.0, salt);
@@ -268,11 +353,24 @@ pub fn build(intents: &[Intent], scfg: Cfg, kind: TeacherKind, aug: bool, verbos
                 let p = s.predict(txt);
                 let g = argmax(&p.probs);
                 if g != *k {
-                    println!("  miss: {txt:?} -> {} ({:.2}), wanted {}", s.tags[g], p.probs[g], s.tags[*k]);
+                    println!(
+                        "  miss: {txt:?} -> {} ({:.2}), wanted {}",
+                        s.tags[g], p.probs[g], s.tags[*k]
+                    );
                 }
             }
         }
-        println!("{} intents, {} train / {} held-out phrases{}", tags.len(), tr.len(), val.len(), if aug { format!(" (+{} augmented)", tr_aug.len() - tr.len()) } else { String::new() });
+        println!(
+            "{} intents, {} train / {} held-out phrases{}",
+            tags.len(),
+            tr.len(),
+            val.len(),
+            if aug {
+                format!(" (+{} augmented)", tr_aug.len() - tr.len())
+            } else {
+                String::new()
+            }
+        );
         for (name, m) in [("teacher", &t), ("student", &s)] {
             println!(
                 "  {name}: {:>6} params, {:>6.0} KB | held-out {:.1}% clean, {:.1}% typos (T={:.1})",
@@ -284,7 +382,11 @@ pub fn build(intents: &[Intent], scfg: Cfg, kind: TeacherKind, aug: bool, verbos
             );
         }
     }
-    let all_aug = if aug { augment(&all, &tags, SEED) } else { all.clone() };
+    let all_aug = if aug {
+        augment(&all, &tags, SEED)
+    } else {
+        all.clone()
+    };
     let teacher = Ensemble::train(&all_aug, tags, &teacher_list(kind), SEED, t.temp, 0);
     let mut student = Ensemble::distill(&teacher, &all_aug, scfg, SEED, s.temp, salt);
     student.clarify_sim = s.clarify_sim;
@@ -300,11 +402,25 @@ pub fn cmd_train_all(o: &Opts) {
     let (tags, all) = intents::flatten(&intents);
     let (tr, val) = split(&intents, 4);
     let t0 = Instant::now();
-    let (tr_aug, all_aug) = if o.aug { (augment(&tr, &tags, SEED), augment(&all, &tags, SEED)) } else { (tr.clone(), all.clone()) };
-    let mut t = Ensemble::train(&tr_aug, tags.clone(), &teacher_list(o.teacher), SEED, 1.0, 0);
+    let (tr_aug, all_aug) = if o.aug {
+        (augment(&tr, &tags, SEED), augment(&all, &tags, SEED))
+    } else {
+        (tr.clone(), all.clone())
+    };
+    let mut t = Ensemble::train(
+        &tr_aug,
+        tags.clone(),
+        &teacher_list(o.teacher),
+        SEED,
+        1.0,
+        0,
+    );
     t.fit_temp(&val);
     let teacher_all = Ensemble::train(&all_aug, tags, &teacher_list(o.teacher), SEED, t.temp, 0);
-    println!("teacher ready ({:.0?}). held-out numbers below are from students trained without the held-out phrases.", t0.elapsed());
+    println!(
+        "teacher ready ({:.0?}). held-out numbers below are from students trained without the held-out phrases.",
+        t0.elapsed()
+    );
     header();
     let mut rng = Rng::new(99);
     for &arch in &o.archs {
@@ -318,16 +434,30 @@ pub fn cmd_train_all(o: &Opts) {
             sc.add(&s, &val, &mut rng);
             let mut f = Ensemble::distill(&teacher_all, &all_aug, cfg, SEED, s.temp, salt);
             f.clarify_sim = s.clarify_sim;
-            let one = Opts { arch, tier, ..o.clone() };
+            let one = Opts {
+                arch,
+                tier,
+                ..o.clone()
+            };
             let path = one.path();
             if let Some(dir) = std::path::Path::new(&path).parent() {
                 let _ = fs::create_dir_all(dir);
             }
             f.save(&path).expect("could not write model");
-            row(&format!("{}-{}", arch.name(), tier.name), f.nominal_params(), model_kb(&f), &sc, 0.0);
+            row(
+                &format!("{}-{}", arch.name(), tier.name),
+                f.nominal_params(),
+                model_kb(&f),
+                &sc,
+                0.0,
+            );
         }
     }
-    println!("wrote {} models in {:.0?}; run one with: tinybot --size <tier> --arch <arch>", o.archs.len() * o.tiers.len(), t0.elapsed());
+    println!(
+        "wrote {} models in {:.0?}; run one with: tinybot --size <tier> --arch <arch>",
+        o.archs.len() * o.tiers.len(),
+        t0.elapsed()
+    );
 }
 
 pub fn cmd_train(o: &Opts) -> Ensemble {
@@ -386,7 +516,14 @@ pub fn model_is_current(m: &Ensemble, intents: &[Intent], o: &Opts) -> bool {
 
 /// Raw inference speed of the shipped model.
 pub fn bench(m: &Ensemble) -> (f32, f32) {
-    let probes = ["hello there", "whats the weather like", "tell me a joke please", "i feel really down today", "thanks a lot", "who made you"];
+    let probes = [
+        "hello there",
+        "whats the weather like",
+        "tell me a joke please",
+        "i feel really down today",
+        "thanks a lot",
+        "who made you",
+    ];
     let n = 3000;
     let t = crate::clock::mono_us();
     let mut sink = 0.0;
@@ -433,7 +570,10 @@ impl Score {
                 Decision::Reject => {}
             }
             if g != *k {
-                *self.conf.entry((m.tags[*k].clone(), m.tags[g].clone())).or_default() += 1;
+                *self
+                    .conf
+                    .entry((m.tags[*k].clone(), m.tags[g].clone()))
+                    .or_default() += 1;
             }
         }
         for t in OOD {
@@ -460,7 +600,10 @@ impl Score {
 }
 
 fn header() {
-    println!("{:<18} {:>8} {:>7} {:>7} {:>7} {:>8} {:>7} {:>6} {:>7}", "model", "params", "KB", "clean", "typos", "auto-ok", "answd", "ood", "secs");
+    println!(
+        "{:<18} {:>8} {:>7} {:>7} {:>7} {:>8} {:>7} {:>6} {:>7}",
+        "model", "params", "KB", "clean", "typos", "auto-ok", "answd", "ood", "secs"
+    );
 }
 
 fn row(name: &str, params: usize, kb: f32, s: &Score, secs: f32) {
@@ -490,7 +633,14 @@ pub fn cmd_eval(o: &Opts) {
     for fold in 0..5 {
         let (tr, val) = split(&intents, fold);
         let tr = if o.aug { augment(&tr, &tags, SEED) } else { tr };
-        let mut t = Ensemble::train(&tr, tags.clone(), &teacher_list(o.teacher), SEED + fold as u64, 1.0, 0);
+        let mut t = Ensemble::train(
+            &tr,
+            tags.clone(),
+            &teacher_list(o.teacher),
+            SEED + fold as u64,
+            1.0,
+            0,
+        );
         t.fit_temp(&val);
         teacher.add(&t, &val, &mut rng);
         tp = t.nominal_params();
@@ -503,16 +653,43 @@ pub fn cmd_eval(o: &Opts) {
         eprint!(".");
     }
     eprintln!();
-    println!("5-fold CV over {} phrases ({:.1?}), teacher = {}", teacher.n, t0.elapsed(), if o.teacher == TeacherKind::Het { "3x bow + cnn + gru" } else { "5x bow" });
+    println!(
+        "5-fold CV over {} phrases ({:.1?}), teacher = {}",
+        teacher.n,
+        t0.elapsed(),
+        if o.teacher == TeacherKind::Het {
+            "3x bow + cnn + gru"
+        } else {
+            "5x bow"
+        }
+    );
     header();
     row("teacher (ensemble)", tp, tkb, &teacher, 0.0);
-    row(&format!("student {}-{}", o.arch.name(), o.tier.name), sp, skb, &student, 0.0);
-    println!("precision vs coverage as the answer threshold moves (now {:.2}); below it the bot asks or declines:", model::P_ANSWER);
+    row(
+        &format!("student {}-{}", o.arch.name(), o.tier.name),
+        sp,
+        skb,
+        &student,
+        0.0,
+    );
+    println!(
+        "precision vs coverage as the answer threshold moves (now {:.2}); below it the bot asks or declines:",
+        model::P_ANSWER
+    );
     println!("  threshold  answered  precision  wrong answers");
     for th in [0.40f32, 0.50, 0.55, 0.60, 0.70, 0.80, 0.90] {
-        let ans: Vec<&(f32, bool)> = student.conf_pairs.iter().filter(|(p, _)| *p >= th).collect();
+        let ans: Vec<&(f32, bool)> = student
+            .conf_pairs
+            .iter()
+            .filter(|(p, _)| *p >= th)
+            .collect();
         let ok = ans.iter().filter(|(_, c)| *c).count();
-        println!("  {th:>8.2}  {:>7.1}%  {:>8.1}%  {:>5.1}% of inputs", Score::pct(ans.len() as u32, student.n), Score::pct(ok as u32, ans.len() as u32), Score::pct((ans.len() - ok) as u32, student.n));
+        println!(
+            "  {th:>8.2}  {:>7.1}%  {:>8.1}%  {:>5.1}% of inputs",
+            Score::pct(ans.len() as u32, student.n),
+            Score::pct(ok as u32, ans.len() as u32),
+            Score::pct((ans.len() - ok) as u32, student.n)
+        );
     }
     let mut c: Vec<_> = student.conf.iter().collect();
     c.sort_by(|a, b| b.1.cmp(a.1));
@@ -530,15 +707,30 @@ pub fn cmd_sweep(o: &Opts) {
     let t0 = Instant::now();
     eprintln!("training teachers on {} fold(s)...", o.folds.len());
     let mut folds = Vec::new();
-    let (mut t_bow, mut t_het, mut sc_bow, mut sc_het) = (Vec::new(), Vec::new(), Score::default(), Score::default());
+    let (mut t_bow, mut t_het, mut sc_bow, mut sc_het) =
+        (Vec::new(), Vec::new(), Score::default(), Score::default());
     let mut rng = Rng::new(5);
     for &f in &o.folds {
         let (tr, val) = split(&intents, f);
         let tr = if o.aug { augment(&tr, &tags, SEED) } else { tr };
-        let mut tb = Ensemble::train(&tr, tags.clone(), &teacher_list(TeacherKind::Bow), SEED + f as u64, 1.0, 0);
+        let mut tb = Ensemble::train(
+            &tr,
+            tags.clone(),
+            &teacher_list(TeacherKind::Bow),
+            SEED + f as u64,
+            1.0,
+            0,
+        );
         tb.fit_temp(&val);
         sc_bow.add(&tb, &val, &mut rng);
-        let mut th = Ensemble::train(&tr, tags.clone(), &teacher_list(TeacherKind::Het), SEED + f as u64, 1.0, 0);
+        let mut th = Ensemble::train(
+            &tr,
+            tags.clone(),
+            &teacher_list(TeacherKind::Het),
+            SEED + f as u64,
+            1.0,
+            0,
+        );
         th.fit_temp(&val);
         sc_het.add(&th, &val, &mut rng);
         t_bow.push(tb);
@@ -546,25 +738,58 @@ pub fn cmd_sweep(o: &Opts) {
         folds.push((tr, val));
         eprintln!("  fold {f} teachers done ({:.0?})", t0.elapsed());
     }
-    println!("folds {:?}, {} held-out phrases, augmentation {}, teacher for distillation: {}", o.folds, sc_het.n, if o.aug { "on" } else { "off" }, if o.teacher == TeacherKind::Het { "het" } else { "bow" });
+    println!(
+        "folds {:?}, {} held-out phrases, augmentation {}, teacher for distillation: {}",
+        o.folds,
+        sc_het.n,
+        if o.aug { "on" } else { "off" },
+        if o.teacher == TeacherKind::Het {
+            "het"
+        } else {
+            "bow"
+        }
+    );
     header();
-    row("teacher 5x bow", t_bow[0].nominal_params(), model_kb(&t_bow[0]), &sc_bow, 0.0);
-    row("teacher 3bow+cnn+gru", t_het[0].nominal_params(), model_kb(&t_het[0]), &sc_het, 0.0);
-    let teachers = if o.teacher == TeacherKind::Het { &t_het } else { &t_bow };
+    row(
+        "teacher 5x bow",
+        t_bow[0].nominal_params(),
+        model_kb(&t_bow[0]),
+        &sc_bow,
+        0.0,
+    );
+    row(
+        "teacher 3bow+cnn+gru",
+        t_het[0].nominal_params(),
+        model_kb(&t_het[0]),
+        &sc_het,
+        0.0,
+    );
+    let teachers = if o.teacher == TeacherKind::Het {
+        &t_het
+    } else {
+        &t_bow
+    };
     for &arch in &o.archs {
         for tier in &o.tiers {
             let cfg = student_cfg(arch, tier, c);
             let (mut sc, mut secs, mut kb, mut params) = (Score::default(), 0.0, 0.0, 0);
             for (i, (tr, val)) in folds.iter().enumerate() {
                 let t1 = Instant::now();
-                let mut s = Ensemble::distill(&teachers[i], tr, cfg, SEED + o.folds[i] as u64, 1.0, 0);
+                let mut s =
+                    Ensemble::distill(&teachers[i], tr, cfg, SEED + o.folds[i] as u64, 1.0, 0);
                 s.fit_temp(val);
                 secs += t1.elapsed().as_secs_f32();
                 sc.add(&s, val, &mut rng);
                 kb = model_kb(&s);
                 params = s.nominal_params();
             }
-            row(&format!("{}-{}", arch.name(), tier.name), params, kb, &sc, secs / folds.len() as f32);
+            row(
+                &format!("{}-{}", arch.name(), tier.name),
+                params,
+                kb,
+                &sc,
+                secs / folds.len() as f32,
+            );
         }
     }
     println!("total {:.0?}", t0.elapsed());
@@ -572,22 +797,52 @@ pub fn cmd_sweep(o: &Opts) {
 
 /// The tier table: what each architecture costs at each size.
 pub fn cmd_models(classes: usize) {
-    println!("{:<7} {:>9}   {:<24} {:<26} {:<26}", "tier", "target", "bow (dim,hid)", "cnn (dim,filters,hid)", "gru (dim,hidden,hid)");
+    println!(
+        "{:<7} {:>9}   {:<24} {:<26} {:<26}",
+        "tier", "target", "bow (dim,hid)", "cnn (dim,filters,hid)", "gru (dim,hidden,hid)"
+    );
     for t in &TIERS {
         let f = |a: Arch| {
             let c = student_cfg(a, t, classes);
-            let extra = if a == Arch::Bow { String::new() } else { format!(",{}", c.ch) };
-            format!("{} ({}{extra},{})", fmt_params(c.nominal(classes)), c.dim, c.hid)
+            let extra = if a == Arch::Bow {
+                String::new()
+            } else {
+                format!(",{}", c.ch)
+            };
+            format!(
+                "{} ({}{extra},{})",
+                fmt_params(c.nominal(classes)),
+                c.dim,
+                c.hid
+            )
         };
-        println!("{:<7} {:>9}   {:<24} {:<26} {:<26}", t.name, fmt_params(t.target), f(Arch::Bow), f(Arch::Cnn), f(Arch::Gru));
+        println!(
+            "{:<7} {:>9}   {:<24} {:<26} {:<26}",
+            t.name,
+            fmt_params(t.target),
+            f(Arch::Bow),
+            f(Arch::Cnn),
+            f(Arch::Gru)
+        );
     }
 }
 
 /// Training step cost of every architecture at every size (for choosing epochs).
 pub fn cmd_speed(classes: usize) {
-    println!("{:<7} {:>12} {:>12} {:>12}   (microseconds per training step)", "tier", "bow", "cnn", "gru");
+    println!(
+        "{:<7} {:>12} {:>12} {:>12}   (microseconds per training step)",
+        "tier", "bow", "cnn", "gru"
+    );
     for t in &TIERS {
-        let us: Vec<String> = [Arch::Bow, Arch::Cnn, Arch::Gru].iter().map(|&a| format!("{:.0}", model::bench_step_us(student_cfg(a, t, classes), classes))).collect();
+        let us: Vec<String> = [Arch::Bow, Arch::Cnn, Arch::Gru]
+            .iter()
+            .map(|&a| {
+                format!(
+                    "{:.0}",
+                    model::bench_step_us(student_cfg(a, t, classes), classes)
+                )
+            })
+            .collect();
         println!("{:<7} {:>12} {:>12} {:>12}", t.name, us[0], us[1], us[2]);
     }
 }
@@ -598,32 +853,69 @@ pub fn cmd_ctx_eval() {
     use crate::skills::Memory;
     // (previous intent, what the user says, intent we want). None of these phrases are in intents.txt.
     const CASES: [(&str, &str, &str); 36] = [
-        ("how_are_you", "fine thanks", "mood_good"), ("how_are_you", "pretty good", "mood_good"), ("how_are_you", "not great", "mood_bad"),
-        ("how_are_you", "meh", "mood_bad"), ("how_are_you", "and you", "and_you"), ("how_are_you", "great", "mood_good"),
-        ("how_are_you", "terrible", "mood_bad"), ("how_are_you", "tired", "mood_bad"),
-        ("joke", "hehe", "laugh"), ("joke", "another", "again"), ("joke", "one more", "again"), ("joke", "yes", "yes"),
-        ("joke", "nope", "no"), ("joke", "ha", "laugh"), ("joke", "not funny", "insult"), ("joke", "do it again", "again"),
-        ("tell_fact", "really", "elaborate"), ("tell_fact", "why", "elaborate"), ("tell_fact", "another", "again"), ("tell_fact", "more", "again"),
-        ("tell_fact", "interesting", "compliment"), ("tell_fact", "how so", "elaborate"),
-        ("mood_bad", "yes", "yes"), ("mood_bad", "yeah", "yes"), ("mood_bad", "no", "no"), ("mood_bad", "not really", "no"),
-        ("mood_bad", "sure", "yes"), ("mood_bad", "nah", "no"),
-        ("greeting", "good thanks", "mood_good"), ("greeting", "hello again", "greeting"), ("greeting", "hey", "greeting"),
-        ("capabilities", "can you do math", "calc_help"), ("quote", "thanks", "thanks"), ("compliment", "thanks", "thanks"),
-        ("insult", "sorry", "sorry"), ("bored", "ok", "yes"),
+        ("how_are_you", "fine thanks", "mood_good"),
+        ("how_are_you", "pretty good", "mood_good"),
+        ("how_are_you", "not great", "mood_bad"),
+        ("how_are_you", "meh", "mood_bad"),
+        ("how_are_you", "and you", "and_you"),
+        ("how_are_you", "great", "mood_good"),
+        ("how_are_you", "terrible", "mood_bad"),
+        ("how_are_you", "tired", "mood_bad"),
+        ("joke", "hehe", "laugh"),
+        ("joke", "another", "again"),
+        ("joke", "one more", "again"),
+        ("joke", "yes", "yes"),
+        ("joke", "nope", "no"),
+        ("joke", "ha", "laugh"),
+        ("joke", "not funny", "insult"),
+        ("joke", "do it again", "again"),
+        ("tell_fact", "really", "elaborate"),
+        ("tell_fact", "why", "elaborate"),
+        ("tell_fact", "another", "again"),
+        ("tell_fact", "more", "again"),
+        ("tell_fact", "interesting", "compliment"),
+        ("tell_fact", "how so", "elaborate"),
+        ("mood_bad", "yes", "yes"),
+        ("mood_bad", "yeah", "yes"),
+        ("mood_bad", "no", "no"),
+        ("mood_bad", "not really", "no"),
+        ("mood_bad", "sure", "yes"),
+        ("mood_bad", "nah", "no"),
+        ("greeting", "good thanks", "mood_good"),
+        ("greeting", "hello again", "greeting"),
+        ("greeting", "hey", "greeting"),
+        ("capabilities", "can you do math", "calc_help"),
+        ("quote", "thanks", "thanks"),
+        ("compliment", "thanks", "thanks"),
+        ("insult", "sorry", "sorry"),
+        ("bored", "ok", "yes"),
     ];
     let intents = intents::load();
     let (tags, all) = intents::flatten(&intents);
     let all = augment(&all, &tags, SEED);
-    let scfg = student_cfg(DEFAULT_ARCH, model::tier(DEFAULT_TIER).expect("tier"), intents.len());
+    let scfg = student_cfg(
+        DEFAULT_ARCH,
+        model::tier(DEFAULT_TIER).expect("tier"),
+        intents.len(),
+    );
     let (mut base_tot, mut flow_tot, mut n_tot) = (0, 0, 0);
     // several independently trained students: a 36-case probe is too small to trust a single seed
     for seed in 0..4u64 {
-        let t = Ensemble::train(&all, tags.clone(), &model::teacher_cfgs_bow(), SEED + 100 * seed, 1.0, 0);
+        let t = Ensemble::train(
+            &all,
+            tags.clone(),
+            &model::teacher_cfgs_bow(),
+            SEED + 100 * seed,
+            1.0,
+            0,
+        );
         let m = Ensemble::distill(&t, &all, scfg, SEED + 100 * seed, 1.0, 0);
         let brain = Brain::new(m, intents.clone());
         let mut s = Session::new(Memory::ephemeral(), false);
         for (prev, text, want) in CASES {
-            let Some(w) = brain.tag_idx(want) else { continue };
+            let Some(w) = brain.tag_idx(want) else {
+                continue;
+            };
             n_tot += 1;
             let mut p = brain.model.predict(text).probs;
             base_tot += (argmax(&p) == w) as u32;
@@ -634,5 +926,9 @@ pub fn cmd_ctx_eval() {
     }
     let n = n_tot / 4;
     let d = 4.0 * n as f32;
-    println!("context probe, {n} short follow-ups x 4 seeds: {:.1}% without context, {:.1}% with the flow prior", 100.0 * base_tot as f32 / d, 100.0 * flow_tot as f32 / d);
+    println!(
+        "context probe, {n} short follow-ups x 4 seeds: {:.1}% without context, {:.1}% with the flow prior",
+        100.0 * base_tot as f32 / d,
+        100.0 * flow_tot as f32 / d
+    );
 }
