@@ -8,29 +8,27 @@ It has skills, a memory, moods and a face, and it runs in your browser as WebAss
 ![Rust 2024](https://img.shields.io/badge/Rust-2024_edition-e8590c?logo=rust&logoColor=white)
 ![Zero dependencies](https://img.shields.io/badge/dependencies-0-2f9e44)
 ![WebAssembly](https://img.shields.io/badge/runs_in-WebAssembly-654ff0?logo=webassembly&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-73_passing-2f9e44)
+![Tests](https://img.shields.io/badge/tests-73_Rust_+_20_JS-2f9e44)
 
-**[▶ Try it live](https://tinybot-self.vercel.app/)** &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Run it yourself](#quick-start) &nbsp;·&nbsp; [Deploy it](#deploy-the-web-version)
+**[▶ Try it live](https://tinybot-self.vercel.app/)** &nbsp;·&nbsp; [Quick start](#quick-start) &nbsp;·&nbsp; [Models](#models) &nbsp;·&nbsp; [Browser build](#browser-build) &nbsp;·&nbsp; [Customising](#customising)
 
 </div>
 
 ---
 
-TinyBot is an **intent router, not a language model**, and that is the point. Every part of it is small enough to read:
-the tokenizer, the GRU and CNN with their backprop, Adam, distillation, the int8 file format, the calculator, the date
-maths, the terminal UI and the WebAssembly bridge. There is no ML framework, no crate, no Python, and no network call.
-Type a message and a **live panel shows the network's top guesses and which words drove the decision**.
-
-## At a glance
+TinyBot is an **intent router, not a language model**, and that is the point. Everything is small enough to read:
+the tokenizer, the GRU and CNN with their backprop, Adam, distillation, the int8 file format, the calculator, the
+terminal UI and the WebAssembly bridge. No ML framework, no crates, no Python, no network calls.
+Type a message and a live panel shows the network's top guesses and which words drove the decision.
 
 | | |
 |---|---|
-| **The brain** | a bidirectional GRU with **251k parameters**, a **316 KB** int8 file, about **40 µs** per message. Switch to a bag-of-features net, a CNN or another size **live**, in the terminal and in the browser |
-| **How it got small** | a 3.2M-parameter teacher ensemble labels synthetic phrases; one student learns to match it (distillation) |
-| **What surrounds it** | exact skills (maths, units, dates, timers, notes), a 24-turn memory, a safety net that runs before the network |
-| **Where it runs** | a terminal UI with a live view into the net, a plain REPL, or **a browser tab** (WebAssembly, a landing page plus a dedicated chat page, nothing leaves the page) |
-| **Quality bar** | 73 Rust tests + 20 for the browser glue, incl. finite-difference gradient checks, fuzzing, hostile-input and corrupt-model tests · clippy clean |
-| **Honest numbers** | about **81%** of unseen phrases routed correctly (5-fold CV), it declines instead of guessing when unsure, **7.7%** wrong answers at the default threshold |
+| **Brain** | bidirectional GRU, **251k params**, **316 KB** int8 file, ~**40 µs** per message. Swap to a CNN, a bag-of-features net or another size live |
+| **How it got small** | a 3.2M-param teacher ensemble labels synthetic phrases; one student learns to match it (distillation) |
+| **Around the brain** | exact skills (maths, units, dates, timers, notes), a 24-turn memory, and a safety net that runs before the network |
+| **Runs in** | an animated terminal UI, a plain REPL, or a browser tab (nothing leaves the page) |
+| **Quality** | 73 Rust + 20 JS tests: finite-difference gradient checks, fuzzing, hostile-input and corrupt-model tests. Clippy clean |
+| **Honest numbers** | ~**81%** of unseen phrases routed correctly (5-fold CV); it asks or declines when unsure; **7.7%** wrong answers at the default threshold |
 
 ## How it works
 
@@ -46,232 +44,96 @@ flowchart LR
     N -->|unsure| Q[asks 'did you mean…?'<br/>or says it doesn't know]
 ```
 
-Exact things are done by exact code. The network only decides *what you meant*, and when it is not sure it says so.
-The details, with measurements, are in [How it works](#how-it-works-in-detail) below.
+Exact things are done by exact code. The network only decides *what you meant*, and says so when it is not sure.
 
-## The terminal UI
+- **Features.** Words, bigrams and character 3/4-grams are hashed into an embedding table, plus a small semantic lexicon
+  ("lonely" leans on what "sad" taught it) with negation ("not great" ≠ "great"). Numbers collapse to one token.
+- **Training.** Hand-written backprop, label smoothing, typo and word-drop augmentation, and label-aware synonym swaps
+  inside an intent ("im feeling good" → "im feeling great"), applied to training data only.
+- **Distillation.** The teacher (3 bag-of-features + 1 CNN + 1 GRU) labels thousands of synthetic phrases (typos, dropped
+  words, spliced phrases). One small student reproduces its soft predictions. Only the student ships.
+- **Confidence.** Output temperature is calibrated on held-out data, so "90% sure" means something. The "did you mean…?"
+  threshold is calibrated per model, because each architecture's embeddings have their own scale.
+- **Context.** The last 24 turns are kept. Replies can depend on the previous intent (`>@prev` lines), numbers and units
+  carry over, `again` re-runs the last repeatable thing, and a learned intent-to-intent prior (`flow.txt`) breaks ties on
+  short replies like "yes" or "more".
 
-```
-╭ TinyBot ─ Lv 3 Byte ─ ▓▓▓▓▓▓░░░░ 41/75 XP ─ mood happy ─ ♥♥♡♡♡ ─ ⏱ 04:32 stretch ─────────────╮
-│                 ✦                  │ you  how are you                                         │
-│               ✧ │      ♥           │ bot  Running at full speed, thanks for asking. You?      │
-│           ╭───────────╮            │                                                          │
-│           │  ♥     ♥  │            │ you  fine, and in meters?                                │
-│           │░  ╰───╯  ░│            │ bot  10 km = 10000 m                                     │
-│           ╰───────────╯            │                                                          │
-│           happy · Byte             │  ★   Fact book: 4/53 collected                           │
-│                                    │                                                          │
-│ ─ BRAIN ────────────────────────── │ ─ CONSOLE · art ──────────────────────────────────────── │
-│ skill:convert  ██████████ 100%     │  /\_/\                                                   │
-│ ─ NEURONS ──────────────────────── │ ( o.o )                                                  │
-│   ▓▓ ░░ ██ ▒▒ ░░ ▓▓ ██ ░░          │  > ^ <                                                   │
-│ ─ STATUS ───────────────────────── │                                                          │
-│ ♥♥♡♡♡ friend (34 pts)              │                                                          │
-╰────────────────────────────────────┴──────────────────────────────────────────────────────────╯
- you ▸
-```
+**Precision is a dial.** `/confidence 0.7` trades coverage for precision. Below the threshold it asks or declines.
 
-*(Schematic. The real thing is colour, animated, and the neuron grid is a live heatmap.)*
+| Threshold | Answered | Precision | Wrong answers |
+|---:|---:|---:|---:|
+| 0.40 | 89.2% | 87.5% | 11.1% of inputs |
+| 0.50 | 84.5% | 89.4% | 8.9% |
+| **0.55 (default)** | 82.6% | 90.6% | 7.7% |
+| 0.70 | 74.0% | 92.7% | 5.4% |
+| 0.80 | 67.4% | 95.2% | 3.2% |
+| 0.90 | 56.3% | 97.7% | 1.3% |
+
+5-fold cross-validation (`tinybot eval`), 996 phrases, 52 intents:
+
+| | Teacher (5 nets) | Student (GRU, 251k) |
+|---|---:|---:|
+| Parameters | 3.22M | 251k |
+| Clean accuracy | 83.0% | 80.9% |
+| With typos | 74.8% | 71.1% |
+| Auto-answered precision | 91.3% | 90.6% |
+| Out-of-scope rejection | 77% | 89% |
+
+*Part of the gain over earlier versions is more paraphrases in `intents.txt`, not the model. The architecture table below is the fair comparison.*
 
 ## Quick start
 
 ```bash
-cargo run --release            # animated terminal UI
-cargo run --release -- chat --plain   # bare REPL (also used automatically when piped)
+cargo run --release                    # animated terminal UI
+cargo run --release -- chat --plain    # bare REPL (also used when piped)
+cargo run --release -- --size large --arch bow   # pick another brain
 ```
 
-No native models are checked in (`bot.bin` and `models/` are in `.gitignore`; only the browser copy, `web/bot.bin`, is committed), so the **first run trains the one it
-needs**: about 2 minutes on one core for the default GRU, much less on several. After that it loads instantly. If you
-edit `intents.txt` the saved model is out of date and it retrains by itself. Teaching it with `/teach`, `/fix` or a
-"yes" to a clarification updates the saved model in the background, and that model is accepted at the next launch
-without another full retrain.
+Needs a 256-colour terminal, at least 84×30 (resize *before* launching). No native models are checked in, so the
+**first run trains the one it needs** (~2 min on one core for the default GRU, less on more cores), then loads instantly.
+Editing `intents.txt` retrains automatically. `/teach`, `/fix` and answering "yes" to a clarification retrain in the
+background and the result is accepted at next launch.
 
-Pick another brain with `--size` and `--arch`, for example `cargo run --release -- --size large --arch bow`.
-See [Model sizes](#model-sizes-and-architectures).
+## Models
 
-You need a terminal with 256-colour support and at least 84×30. Resize before launching; the layout is
-fixed at start.
+Three hand-written architectures at six sizes. `cargo run --release -- models` prints the exact shapes.
+Each size is fitted so every architecture lands within 3% of the same parameter budget.
 
-## Run it in the browser
+| Size | Params | Bag-of-features | Temporal CNN | Bidirectional GRU |
+|---|---:|:-:|:-:|:-:|
+| `nano` | 68k | ✓ | ✓ | ✓ |
+| `small` | 100k | ✓ | ✓ | ✓ |
+| `base` | 250k | ✓ | ✓ | ✓ **default** |
+| `large` | 500k | ✓ | ✓ | ✓ |
+| `xl` | 1M | ✓ | ✓ | ✓ |
+| `max` | 4M | ✓ | ✓ | ✓ |
 
-The same engine compiles to a single WebAssembly module that a static site drives. Nothing the visitor types leaves
-their browser; notes, XP and timers are kept in `localStorage`.
+*Params = allocated parameters. Files are smaller because only trained embedding rows are stored, as int8.*
 
-**Two pages, one bot**
+| Architecture | What it does | Speed per query |
+|---|---|---|
+| **bow** | fastText-style: hashed word/bigram/char-n-gram embeddings, mean-pooled in two channels, ReLU layer | 6–19 µs (68k → 4M) |
+| **cnn** | same embeddings, 1D convolutions of width 1/2/3, max-over-time pooling. Keeps local word order | 13–31 µs |
+| **gru** | same embeddings through a GRU in both directions, mean-pooled. Keeps order and negation ("so so") | 19 µs at 68k, 46 µs at 250k, 332 µs at 4M |
 
-| Page | What it is for |
-|---|---|
-| `index.html` | the landing page: what TinyBot is, the numbers, and a small **quick chat** card for a couple of messages. **Full chat ↗** opens the dedicated page and carries the conversation over |
-| `chat.html` | the dedicated chat: a roomy console on the left; on the right a **timer window** and a **live brain panel** (the animated face and mood, the network's top five intent probabilities, the words that mattered by leave-one-word-out influence, and the time the pass took) |
+All three use typo/word-drop augmentation, label smoothing and temperature calibration. The sequence models use Adam with
+gradient clipping. LSTM is not implemented (the GRU covers the same ground with fewer parameters).
 
-**Timers get their own window.** Say `timer for 5 minutes` or `remind me in 10 minutes to stretch` and a small window opens on the
-right with a countdown ring per timer, a cancel button and a mute switch. It rings with a beep and a message, and running timers
-survive a page reload or a trip between the two pages, because they are part of the saved state. On a phone the window docks above the input.
-
-**Pick the brain.** The chat page has a **Model** card: choose the architecture (bow, cnn, gru) and the size (nano to large) and the
-engine swaps to it on the spot, with your conversation, notes, XP and timers untouched. Typing `/model gru large` or `/model cnn`
-does the same on either page, and your choice is remembered. Each model is fetched only when you pick it (100 KB to 470 KB) and kept
-for the rest of the visit. On a phone the card starts folded.
-
-**Theme and icons.** A sun/moon button switches light and dark (it follows your system by default and remembers your choice).
-All icons are inline SVG, so there is no icon font and no extra request.
+**Switching live.** `/model` shows what is running; `/model gru large`, `/model cnn` or `/model small` switches on the spot
+(a part you leave out keeps its current value). A model already on disk loads in a moment. Otherwise it is built on a
+background thread while you keep chatting, saved to `models/`, and swapped in when ready. Models built this way use the
+quick bag-of-features teacher, so run `train --all` once for the best versions.
 
 ```bash
-rustup target add wasm32-unknown-unknown
-./build-web.sh --serve         # builds web/tinybot.wasm, web/bot.bin and web/models/, then serves http://localhost:8000
+cargo run --release -- train --all --archs bow,gru   # many sizes into models/, from ONE shared teacher
+cargo run --release -- sweep --folds 0,3             # compare every architecture and size (slow)
+cargo run --release -- speed                         # training cost per step
 ```
 
-The model set is the slow step (one shared teacher builds every student: a few minutes on one core, much less on several). Use
-`./build-web.sh --skip-models` to keep the models you already have, or `TB_TIERS=nano,small,base ./build-web.sh` to ship fewer sizes (add `xl` to ship a 1M one, which is slow to build).
+**What the measurements say.** Clean accuracy, folds 0 and 3, 408 held-out phrases (about ±2 points of noise), every
+student distilled from the same teacher (82.4% clean):
 
-How it is put together:
-
-| | |
-|---|---|
-| `src/web.rs` | a tiny C ABI (`tb_init`, `tb_reply`, `tb_state`, `tb_tick`, `tb_timers`, `tb_cancel_timer`, `tb_set_model`, `tb_model_info`) with JSON replies; plain Rust underneath, tested natively |
-| `src/clock.rs` | time, randomness and time zone behind one door: `std` natively, four host imports in the browser |
-| `web/tinybot.js` | the glue: instantiates the module, copies bytes in and out, saves state, restarts the module if it ever traps |
-| `web/chatcore.js` `web/brain.js` `web/timers.js` | shared page parts: the message log and input, the brain panel, the timer window |
-| `web/models.js` `web/models/` | the model picker and the `/model` command; `models/index.json` lists every model the page can switch to (`bot.bin` is the default, gru base) |
-| `web/face.js` `web/icons.js` `web/theme.js` | the animated face, the inline SVG icons, light/dark switching |
-| `web/app.js` `web/chat.js` | the landing page and the chat page |
-| `web/` | everything above plus `index.html`, `chat.html`, `style.css`, `tinybot.wasm`, `bot.bin`: the whole site, no build step on the host |
-
-What differs from the native app:
-
-- `/teach`, `/fix`, `/know`, `/unlearn` and `/retrain` are switched off: they rewrite files and retrain, which a browser
-  tab cannot do. Teach it natively, rebuild, and ship the new `bot.bin`.
-- `bot.bin` and every file in `web/models/` must be trained on the same `intents.txt` the wasm was built from. `build-web.sh` guarantees
-  that by training in an empty directory; the app refuses to load a mismatched model and says why, and a Rust test checks every shipped file.
-- The clock, randomness and time zone come from the page. `cargo test --lib --features host-clock` runs that same
-  code path natively.
-- Timers are announced live (the page polls once a second); native plain mode only reports them on your next message.
-
-
-## Testing
-
-```bash
-cargo test --release                                 # 73 tests: skills, parsers, gradients, fuzzing, the web API
-cargo test --release --lib --features host-clock     # the same suite through the browser clock path
-node --test tests/glue.test.mjs tests/models.test.mjs  # 20 tests: the JS glue against a stand-in module (timers, model swaps) and the model picker logic
-node tests/e2e.mjs                                   # the real .wasm, loading every shipped model in turn, after ./build-web.sh
-```
-
-`.github/workflows/web.yml` runs all of it, and also checks that the built `.wasm` exports exactly the functions the page
-expects and imports exactly the four host functions.
-
-## What it can do
-
-| | |
-|---|---|
-| **Chat** | 52 intents: greetings, moods, jokes, riddles, identity, games, small talk. Greets by time of day about half the time |
-| **Math** | `12*(3+4)`, `20% of 80`, `sqrt 144`, `2^10`, `5!`, `sin(pi/2)` |
-| **Follow-ups** | `times 2`, `double that`, `and in meters?`, `what about 5 miles`, `again`, `why` |
-| **Units** | length, mass, volume, speed, time, data (KB vs KiB), temperature |
-| **Dates & time** | `days until 2026-12-25`, `in 10 days`; clock and dates use your local time zone (auto-detected, or `/tz +5:30`) |
-| **Timers** | `timer for 5 minutes`, `remind me in 10 minutes to stretch`, `pomodoro`. Rings in real time |
-| **Memory** | `my favorite color is teal`, `i live in Berlin`, `i like pizza`, `i hate mondays`, `what do you know about me` |
-| **Notes** | `note: buy stamps`, `remember to call mom`, `show my notes`, `search notes for stamps` |
-| **Birthday** | `my birthday is 12 march`, `how many days until my birthday` (it greets you on the day) |
-| **List** | `add milk to my list`, `show my list`, `remove 1` |
-| **Fact book** | 53 facts in 7 categories: `tell me a space fact`, `animal fact`, `fact of the day`. Unheard ones come first |
-| **ASCII art** | 16 pieces (cat, dog, mouse, bunny, person, fish, owl, house, flower, star, sun, tree, heart, rocket, crab, robot). Ask for something it can't draw and it tells you, instead of drawing something random |
-| **Knowledge** | about 170 short topics in `kb.txt` (countries, India, space, science, computing, history, sport): `what is the capital of turkey`, `how fast is a cheetah`, then `tell me more`. Teach it more instantly with `/know topic => text` (saved in `kb_user.txt`, no retraining). Questions it only half understands ("capital of mars") are declined |
-| **Games** | riddles, rock-paper-scissors (the bot learns your habits), number guessing |
-
-## It has feelings, sort of
-
-- **18 faces** driven by what's happening: love (hearts float up), anger (steam), sad (tears), laughing, wow,
-  confused, curious, thinking (spinning eyes, thought bubble), proud, wink, sulking (storm cloud), sleepy and asleep (z Z z).
-  Preview any with `/emote love`.
-- **Mood** drifts with how you treat it. Compliments lift it, insults sink it. Push it far enough and it
-  **sulks**: it refuses to help until you say sorry (or pay it a compliment). It forgives on its own after a few turns.
-- **Bond** grows as you talk (stranger → acquaintance → friend → buddy → best friend), shown as hearts.
-  It's remembered between sessions, so it notices when you've been away for days.
-- **Energy** drains as you chat and recovers while idle. Tired bots yawn. Leave it alone and it dozes off.
-- **XP, levels, titles** (Bit → Nibble → Byte → Neuron → … → Overfit Overlord), **achievements**, day **streaks**,
-  and an **intent dex** (`/dex`): `???` until you discover each thing it can do.
-- **Safety net.** A deterministic check of about 50 phrases and paraphrases ("want to die", "nobody would miss
-  me", "tired of living", …) runs before the neural net, games, sulking and every skill. A message about suicide
-  or self-harm always gets a plain, serious answer pointing to real help, with no XP, badges or mood effects.
-  The tests prove it works even with an almost untrained model, because a small classifier should never be the
-  only thing standing between someone and that answer. The network adds a second opinion for wordings the list
-  misses, but it ignores inputs with digits: a 251k GRU once answered "10 km to miles" with the crisis message,
-  so there is now a regression test that trains its own small GRU and checks ordinary requests against it. It's a keyword list, so it will still miss unusual
-  phrasings; treat it as a safety net, not a guarantee.
-- **Night Owl** badge: chatting between midnight and 5am *your* local time (needs a known time zone).
-
-## Commands
-
-```
-/dex  /facts  /memory  /notes  /timers   what you've discovered, heard, told it
-/stats      level, XP, badges, model size and speed
-/model      which brain is running and which others are built; /model gru large, /model cnn, /model small switch live
-/confidence 0.7   how sure it must be to answer (higher = fewer mistakes, more questions)
-/history    its short-term memory of this chat
-/why        which words drove the last decision
-/fix <tag>  its last answer was wrong, it meant <tag>   (learns in the background)
-/teach a => b   create a new intent: when you say a, it replies b
-/unlearn    undo the last thing it learned
-/tz +5:30   set your time zone (or /tz auto)
-/intents  /bench  /emote <x>  /anim  /clear  /forget  /help  /quit
-
-Learning runs on a background thread (10 to 30 s on one core), so you can keep chatting; a spinner shows in
-the header and the new brain swaps in when it's done.
-```
-
-Command output lands in the **console pane under the chat**, so the conversation stays readable.
-Lists, notes and ASCII art go there too. Press Enter on an empty line to clear it.
-
-## Model sizes and architectures
-
-Three architectures, all hand-written, six sizes each (`cargo run --release -- models` prints this table):
-
-| Size | Parameters | Bag-of-features | Temporal CNN | Bidirectional GRU |
-|---|---:|---|---|---|
-| `nano` | 68k | `bow-nano` | `cnn-nano` | `gru-nano` |
-| `small` | 100k | `bow-small` | `cnn-small` | `gru-small` |
-| `base` | 250k | `bow-base` | `cnn-base` | **`gru-base` (default)** |
-| `large` | 500k | `bow-large` | `cnn-large` | `gru-large` |
-| `xl` | 1M | `bow-xl` | `cnn-xl` | `gru-xl` |
-| `max` | 4M | `bow-max` | `cnn-max` | `gru-max` |
-
-Nothing is prebuilt: each model is built the first time you ask for it, or all at once with `train --all`.
-
-**Switch without restarting.** In the terminal UI or the plain REPL, `/model` shows what is running and what is built, and
-`/model gru large`, `/model cnn` or `/model small` switches on the spot (a part you leave out keeps its current value). A model that
-is already on disk loads in a moment. One that is not is built on a background thread while you keep chatting (the header shows
-`switching model`), saved to `models/` for next time, and swapped in when it is ready. Models built this way use the quick
-bag-of-features teacher, so they are a little less accurate than ones from `tinybot train --all`; run that once for the best versions.
-In the browser the same thing is a picker, because the page cannot train: it switches between the models `build-web.sh` shipped.
-Each size is fitted so every architecture lands within 3% of the same parameter budget, so the comparison is fair.
-"Parameters" means allocated parameters (what the model costs in memory); the file on disk is smaller because
-only trained embedding rows are stored, as int8.
-
-```bash
-cargo run --release -- --size large --arch gru      # run that brain (trains it on first use)
-cargo run --release -- train --all --archs bow,gru  # build many sizes into models/ from ONE shared teacher
-cargo run --release -- sweep --folds 0,3            # compare every architecture and size (slow: use several cores)
-cargo run --release -- speed                        # training cost per step for each one
-```
-
-- **Bag-of-features** (fastText-style): hashed word, bigram and character n-gram embeddings, mean-pooled in two
-  channels, then a ReLU layer. The fastest: 6 to 19 µs per query from 68k to 4M parameters.
-- **Temporal CNN**: the same hashed token embeddings, then 1D convolutions of width 1, 2 and 3, max-over-time
-  pooling and a dense head. Keeps local word order. 13 to 31 µs per query.
-- **Bidirectional GRU**: the same token embeddings run through a GRU in both directions with hand-written
-  backprop through time, mean-pooled. Keeps order and negation ("not at all", "so so"). 19 µs per query at 68k,
-  46 µs at 250k, 332 µs at 4M.
-- All three are trained with typo and word-drop augmentation, label smoothing and temperature calibration. The
-  sequence models use Adam with gradient clipping, and every gradient is checked against finite differences in the tests.
-- LSTM is not implemented (the GRU covers the same ground with fewer parameters).
-
-### What the measurements say
-
-Same data, same teacher, same folds. Clean accuracy, 2 folds (0 and 3), 408 held-out phrases, so about ±2 points of
-noise. Every student is distilled from the same teacher (3 bag-of-features nets + 1 CNN + 1 GRU, 82.4% clean).
-
-| Size | Bag-of-features | CNN | GRU |
+| Size | bow | cnn | gru |
 |---|---:|---:|---:|
 | 68k | 77.5% | 77.2% | **78.7%** |
 | 100k | **80.4%** | 79.4% | 79.2% |
@@ -280,74 +142,87 @@ noise. Every student is distilled from the same teacher (3 bag-of-features nets 
 | 1M | 80.1% | 80.9% | **81.1%** |
 | 4M | 81.1% | 80.6% | **82.6%** |
 
-- **No architecture wins clearly**. The GRU is nominally ahead at 68k, 500k, 1M and 4M, but by about a point.
-- **The CNN never clearly beats the bag-of-features net.**
-- **0 to 2 points, inside the noise.** With about a thousand training
-  phrases the data is the ceiling, not the model.
+No architecture wins clearly: the GRU is nominally ahead at most sizes, by about a point, which is inside the noise. Going
+from 250k to 4M bought roughly one point. With ~1,000 training phrases **the data is the ceiling, not the model**; more
+phrases per intent is the biggest lever.
 
-## How it works in detail
+## Browser build
+
+The same engine compiles to one WebAssembly module driven by a static site (`web/`, no build step on the host).
+Nothing the visitor types leaves the tab; notes, XP and timers live in `localStorage`.
+
+| Page | Purpose |
+|---|---|
+| `index.html` | landing page with a small quick-chat card; **Full chat ↗** carries the conversation over |
+| `chat.html` | roomy console, a timer window, a model picker, and the live brain panel (animated face, top-5 intent probabilities, word influence, pass time) |
+
+- **Timers** get their own window with a countdown ring, cancel button and mute switch. They survive reloads and page changes.
+- **Model picker.** Choose architecture and size and the engine swaps live, keeping your conversation, notes, XP and timers.
+  `/model gru large` works on both pages and your choice is remembered. The browser ships `nano`–`large` for all three
+  architectures (12 models, ~100–455 KB each, fetched only when picked); `xl` is optional via `TB_TIERS`.
+- **Theme.** Light/dark button; follows your system by default. All icons are inline SVG.
+
+```bash
+rustup target add wasm32-unknown-unknown
+./build-web.sh --serve                       # builds web/tinybot.wasm, web/bot.bin, web/models/, serves :8000
+./build-web.sh --skip-models                 # keep existing models (the slow step)
+TB_TIERS=nano,small,base ./build-web.sh     # ship fewer sizes
+```
+
+Differences from native: `/teach`, `/fix`, `/know`, `/unlearn` and `/retrain` are off (they need files and training).
+`bot.bin` and every file in `web/models/` must be trained on the same `intents.txt` as the wasm; `build-web.sh` guarantees
+this by training in an empty directory, the app refuses a mismatched model and says why, and a Rust test checks every
+shipped file. Clock, randomness and time zone come from the page (`cargo test --lib --features host-clock` exercises that path).
+
+| File | Role |
+|---|---|
+| `src/web.rs` | C ABI (`tb_init`, `tb_reply`, `tb_state`, `tb_tick`, `tb_timers`, `tb_cancel_timer`, `tb_set_model`, `tb_model_info`) with JSON replies |
+| `src/clock.rs` | time, randomness, time zone behind one door: `std` natively, four host imports in the browser |
+| `web/tinybot.js` | glue: instantiates the module, copies bytes, saves state, restarts the module after a trap |
+| `web/models.js`, `web/models/index.json` | model picker, `/model` command, manifest of switchable models (`bot.bin` = gru-base) |
+| `web/chatcore.js`, `brain.js`, `timers.js`, `face.js` | message log, brain panel, timer window, animated face |
+
+## What it can do
+
+| | |
+|---|---|
+| **Chat** | 52 intents: greetings, moods, jokes, riddles, identity, games, small talk |
+| **Maths** | `12*(3+4)`, `20% of 80`, `sqrt 144`, `2^10`, `5!`, `sin(pi/2)`; follow-ups like `times 2`, `double that` |
+| **Units** | length, mass, volume, speed, time, data (KB vs KiB), temperature; `and in meters?`, `what about 5 miles` |
+| **Dates & timers** | `days until 2026-12-25`, `in 10 days`, `timer for 5 minutes`, `remind me in 10 minutes to stretch`, `pomodoro`. Uses your local time zone (auto, or `/tz +5:30`) |
+| **Memory** | `my favorite color is teal`, `i live in Berlin`, `my birthday is 12 march`, `what do you know about me` |
+| **Notes & list** | `note: buy stamps`, `search notes for stamps`, `add milk to my list`, `remove 1` |
+| **Knowledge** | ~170 short topics in `kb.txt` (`what is the capital of turkey`, then `tell me more`); 53 facts in 7 categories (`tell me a space fact`); `/know topic => text` adds more instantly. Half-understood questions ("capital of mars") are declined |
+| **ASCII art** | 16 pieces; asking for something it can't draw gets an honest "I can't" |
+| **Games** | riddles, rock-paper-scissors (it learns your habits), number guessing |
+
+### It has feelings, sort of
+
+- **18 faces** driven by context (love, anger, sad, wow, thinking, sulking, asleep…). Preview with `/emote love`.
+- **Mood** drifts with how you treat it. Insult it enough and it **sulks** until you say sorry.
+- **Bond** grows as you talk (stranger → best friend) and is remembered between sessions. **Energy** drains as you chat and recovers while idle.
+- **XP, levels, titles**, achievements, day streaks and an **intent dex** (`/dex`): `???` until you discover each thing it can do.
+- **Safety net.** About 50 crisis phrases and paraphrases are checked deterministically *before* the network, games, sulking and every skill. A hit always gets a plain, serious answer pointing to real help, with no XP or mood effects. Tests prove it works even with an almost untrained model. The network adds a second opinion but ignores inputs with digits (a 251k GRU once answered "10 km to miles" with the crisis message, hence a regression test). It is a keyword list, so treat it as a safety net, not a guarantee.
+
+## Commands
 
 ```
- your text
-    │
-    ├─► safety net first (keyword check for self-harm), then skills (high precision, no training data):
-    │   todo · timers · birthday · units · follow-ups · dice · random · math · facts · notes
-    │
-    └─► neural router ──► intent ──► reply (context-aware, mood-flavoured)
-          hashed token features ─► GRU / CNN / bag-of-features ─► dense head ─► softmax
-          └ a learned "what usually follows what" prior breaks ties on short replies
+/dex /facts /memory /notes /timers   what you've discovered, heard, told it
+/stats          level, XP, badges, model size and speed
+/model [x y]    show or switch brain, e.g. /model gru large
+/confidence 0.7 how sure it must be to answer (higher = fewer mistakes)
+/why            which words drove the last decision
+/history        short-term memory of this chat
+/fix <tag>      last answer was wrong, it meant <tag>
+/teach a => b   new intent: when you say a, it replies b
+/know a => b    teach a lookup fact (no retraining)
+/unlearn        undo the last thing it learned
+/tz +5:30       set time zone (or /tz auto)
+/intents /bench /emote <x> /anim /clear /forget /help /quit
 ```
 
-**Features.** Words, bigrams and character 3/4-grams are hashed into an embedding table, plus a small
-hand-written semantic lexicon (so "lonely" leans on what "sad" taught it) with negation ("not great" ≠ "great").
-Numbers collapse to one token.
-
-**Training.** Hand-written backprop, label smoothing, typo and word-drop augmentation, plus **label-aware synonym
-augmentation**: inside an intent like `mood_good`, a word is swapped for another member of its semantic class
-("im feeling good" becomes "im feeling great"). It is only ever applied to training data, never to held-out phrases.
-
-**Parameter efficiency: distillation.** A teacher of five nets (3 bag-of-features, 1 CNN, 1 GRU; 3.2M parameters
-in total) is trained first. It then labels thousands of synthetic phrases (typos, dropped words, spliced
-phrases) and **one small student learns to reproduce its soft predictions**. Only the student ships.
-
-5-fold cross-validation of the default (`cargo run --release -- eval`), 996 phrases, 52 intents:
-
-| | Teacher (5 nets) | Student (GRU, 251k) |
-|---|---:|---:|
-| Parameters | 3.22M | 251k |
-| File size | 3,230 KB | 308 KB |
-| Clean accuracy | 83.0% | 80.9% |
-| Accuracy with typos | 74.8% | 71.1% |
-| Auto-answered precision | 91.3% | 90.6% |
-| Share auto-answered | 84.1% | 82.6% |
-| Out-of-scope rejection | 77% | 89% |
-
-Caveat: I added paraphrases to `intents.txt` for the intents that were missing in an earlier run, so part of the gain
-over earlier versions is data, not the model. The controlled table above is the fair architecture comparison.
-
-**Precision is a dial.** `/confidence 0.7` (or `tinybot eval`'s table) trades coverage for precision. Below the
-threshold the bot asks "did you mean …?" or admits it doesn't know instead of guessing:
-
-| Answer threshold | Answered | Precision | Wrong answers |
-|---:|---:|---:|---:|
-| 0.40 | 89.2% | 87.5% | 11.1% of inputs |
-| 0.50 | 84.5% | 89.4% | 8.9% |
-| **0.55 (default)** | 82.6% | 90.6% | 7.7% |
-| 0.60 | 80.0% | 91.3% | 6.9% |
-| 0.70 | 74.0% | 92.7% | 5.4% |
-| 0.80 | 67.4% | 95.2% | 3.2% |
-| 0.90 | 56.3% | 97.7% | 1.3% |
-
-**Context.** The last 24 turns are kept. Replies can depend on the previous intent (`>@prev` lines),
-numbers and units carry over between turns, `again` re-runs the last repeatable thing, and "what did I just say"
-and "recap" read the history. The transition prior (which intent tends to follow which) is seeded from
-`intents.txt` and keeps learning in `flow.txt`. On a small 36-case probe of short follow-ups it scored higher with
-the prior than without, but that's too small a test to prove much.
-
-**Confidence.** The temperature of the output distribution is calibrated on held-out data, so "90% sure" means
-something. The "did you mean …?" similarity threshold is calibrated per model too (each architecture's embeddings
-have their own scale): it sits above what out-of-scope phrases reach and below what related phrases reach. If it
-learns something wrong, `/unlearn` removes it.
+Learning runs on a background thread (10–30 s on one core); a header spinner shows progress. Command output lands in a
+console pane under the chat. Press Enter on an empty line to clear it.
 
 ## Customising
 
@@ -363,85 +238,56 @@ hey there
 > I'm {mood}, level {level}.    # placeholders
 ```
 
-Placeholders: `{name} {time} {date} {weekday} {coin} {dice} {rand} {mood} {level} {title} {xp} {streak}
-{msgs} {dex} {dex_total} {known_days} {bond_label} {bond} {hearts} {energy} {greet} {daypart} {params} {tz}`.
-`{greet}` is "Good morning"/"Good evening"…, `{daypart}` is morning/afternoon/evening/night; mix lines that use
-them with lines that don't and the bot is only *sometimes* time-aware.
-Riddles are `question | answer/alt answer`. Add the phrases first, run `eval`, then trust the numbers.
+Placeholders: `{name} {time} {date} {weekday} {coin} {dice} {rand} {mood} {level} {title} {xp} {streak} {msgs} {dex}
+{dex_total} {known_days} {bond_label} {bond} {hearts} {energy} {greet} {daypart} {params} {tz}`. Riddles are
+`question | answer/alt answer`. Add phrases, run `eval`, then trust the numbers.
 
-`art.rs` holds the ASCII gallery (add a `const` and a `GALLERY` row). `facts.txt` is `category: fact`, one per line. New categories need a keyword entry in `src/facts.rs`.
+Other editable files: `facts.txt` (`category: fact`; new categories need a keyword entry in `src/facts.rs`), `kb.txt`
+(`[Topic | keywords]` then one fact per line) and `art.rs` (add a `const` and a `GALLERY` row).
 
-## Files it writes (all next to the binary, all plain text except the model)
+**Files it writes** (next to the binary, plain text except models; delete any to reset that part):
+`bot.bin` and `models/<arch>-<size>.bin` (models), `memory.txt` (facts, list, notes, XP, dex, bond), `flow.txt`
+(intent transitions), `learned.txt` (from `/fix`, `/teach`, clarifications), `kb_user.txt` (from `/know`). All writes
+are sanitised so input can't break the line formats. Nothing touches the network.
 
-| File | What |
-|---|---|
-| `bot.bin` | the default student (GRU 250k, int8), trained on first run |
-| `models/<arch>-<size>.bin` | every other size and architecture you build |
-| `memory.txt` | your facts, list, notes, XP, dex, bond, fact book |
-| `flow.txt` | learned intent-to-intent transitions |
-| `learned.txt` | phrases and intents from `/fix`, `/teach` and "yes" to a clarification |
-| `kb_user.txt` | topics you added with `/know` |
+## Testing
 
-Delete any of them to reset that part. `/forget` wipes `memory.txt`. Writes to `learned.txt` and `memory.txt` are
-sanitised so input can't break the line-based formats. Nothing touches the network.
+```bash
+cargo test --release                                   # 73 tests (includes a 6,000-input fuzz run, ~1 min)
+cargo test --release --lib --features host-clock       # same suite via the browser clock path
+node --test tests/glue.test.mjs tests/models.test.mjs  # 20 JS tests: glue and model picker logic
+node tests/e2e.mjs                                     # real .wasm, every shipped model, after ./build-web.sh
+cargo run --release -- eval | ctx | bench              # cross-validation, context-prior probe, speed
+```
+
+CI (`.github/workflows/web.yml`) runs all of it and checks the built `.wasm` exports exactly the functions the page
+expects and imports exactly the four host functions.
 
 ## Source map
 
 | | |
 |---|---|
-| `model.rs` | architectures and tiers, bag-of-features net, ensembles, distillation, int8 storage, calibration |
-| `seqnet.rs` | the temporal CNN and bidirectional GRU, with backprop through time and Adam |
+| `model.rs` · `seqnet.rs` | architectures, tiers, ensembles, distillation, int8 storage · CNN and GRU with BPTT and Adam |
 | `text.rs` | tokenising, hashed features, lexicon, negation, typo noise |
-| `bot.rs` | routing, dialogue state, follow-ups, games, context prior |
-| `skills.rs` `calc.rs` | dates, dice, memory, notes, birthday, timers · calculator, units |
-| `persona.rs` | mood, sulking, bond, energy, XP, badges, emotion mapping |
-| `facts.rs` `art.rs` | the fact book · ASCII gallery |
-| `tui.rs` | the terminal UI: face canvas, particles, brain panel, console |
-| `cmds.rs` `train.rs` | slash commands · training pipeline, eval, benchmarks |
-| `lib.rs` `main.rs` | the engine as a library · the native command line over it |
-| `clock.rs` `web.rs` | time, randomness and time zone behind one door (native or page-provided) · the browser API (`tb_*` C ABI, JSON replies, state and timer export) |
-| `web/*.js` `*.html` `style.css` | the browser site: landing page, chat page, timer window, brain panel (see [Run it in the browser](#run-it-in-the-browser)) |
-| `tests.rs` + `seqnet.rs` + `web.rs` | 73 tests, including finite-difference gradient checks for the CNN and GRU: calculator edge cases and hostile nesting, conversions, dates, memory, notes, timers, facts, games, corrupt model files, the terminal UI's column widths, sulking, a fuzz run |
-
-```bash
-cargo test --release     # includes a 6,000-input fuzz run; trains several small models, about a minute
-cargo run --release -- eval      # teacher vs student cross-validation
-cargo run --release -- ctx       # does the context prior help?
-cargo run --release -- bench     # inference speed
-```
+| `bot.rs` · `persona.rs` | routing, dialogue state, games, context prior · mood, bond, energy, XP, badges |
+| `skills.rs` · `calc.rs` · `kb.rs` | dates, memory, notes, timers · calculator and units · BM25 knowledge base |
+| `facts.rs` · `art.rs` | fact book · ASCII gallery |
+| `tui.rs` · `cmds.rs` · `train.rs` | terminal UI · slash commands · training, eval, benchmarks |
+| `web.rs` · `clock.rs` · `web/` | browser API and clock · the static site |
 
 ## Design notes
 
-Things that were less obvious than they look, in case you are building something similar:
+- **Distillation beat size.** A teacher ensemble labelling synthetic phrases let a 251k student keep most of the teacher's accuracy at a tenth of the size.
+- **Never let the network be the only safety net.** A deterministic check runs first; a regression test caught a GRU misrouting a unit conversion to the crisis reply.
+- **WebAssembly is mostly about what `std` can't do.** `SystemTime::now()` and `Instant::now()` panic on `wasm32-unknown-unknown`, and there are no threads or files, so all time and randomness go through `clock.rs`.
+- **Mind 32-bit assumptions.** Hashing uses `u64` and reduces before casting, so a natively trained model maps words to the same buckets in wasm.
+- **Budget the stack.** A wasm module gets 1 MiB by default; a test runs the whole load-and-answer path on a 512 KiB thread.
+- **Ship the model with the module it was trained for,** and survive traps by restarting from the last saved state.
 
-- **Distillation beat size.** With about a thousand training phrases the data is the ceiling: going from 250k to 4M
-  parameters bought roughly one point of accuracy, inside the noise. A teacher ensemble labelling synthetic phrases let a
-  251k student keep most of the teacher's accuracy at a tenth of the size.
-- **Never let the network be the only safety net.** A deterministic keyword check runs before the model, and a regression
-  test caught a 251k GRU answering "10 km to miles" with the crisis message.
-- **Porting to WebAssembly is mostly about what `std` cannot do there.** `SystemTime::now()` and `Instant::now()` panic on
-  `wasm32-unknown-unknown`, there are no threads, and no files. All time and randomness now go through one module
-  (`clock.rs`) with a feature flag that lets native tests exercise the browser path.
-- **Check the 32-bit assumptions.** Hashing uses `u64` and reduces before casting, so a model trained natively maps words
-  to the same buckets in a 32-bit wasm module.
-- **Budget the stack.** A wasm module gets 1 MiB by default and overflowing it traps, so a test runs the whole
-  load-and-answer path, hostile input included, on a 512 KiB thread.
-- **Ship the model with the module it was trained for.** The app refuses to start on a model/intents mismatch instead of
-  silently answering with the wrong labels.
-- **Make traps survivable.** If the module ever traps, the page restarts it from the last saved state.
+## Limitations
 
-## Honest limitations
-
-- The browser build is read-only: it cannot learn new intents, because that needs files and a training run. The WebAssembly
-  build itself is only as tested as its native twin: the Rust is exercised natively (including the browser clock path) and the
-  glue against a stand-in module, and the real `.wasm` is checked by `tests/e2e.mjs` after you build it.
-- It's an intent router, not a language model. It can't answer questions outside what's in `intents.txt`,
-  `facts.txt` and the skills. When it doesn't know, it says so.
-- About 81% of held-out phrases are classified correctly, and it asks or declines instead of guessing when
-  unsure. More phrases per intent is the single biggest lever, bigger than any architecture or size.
-- On one CPU core the first build of the default GRU takes about 2 minutes, and the 4M GRU takes much longer.
-  Training uses one thread per ensemble member, so more cores help.
-- Time zone comes from the OS (`date +%z`, Unix only) or `/tz`. If neither is available it falls back to UTC and
-  switches time-of-day greetings off instead of guessing.
-- The terminal UI needs Unix-style terminal size detection (`stty`) to fit the window; elsewhere it falls back to
-  `LINES`/`COLUMNS` or 112×36. Ctrl-C quits abruptly: your progress is saved after every message.
+- The browser build is read-only: it can't learn new intents (that needs files and a training run). Teach natively, rebuild, ship the new `bot.bin`.
+- It's an intent router. It can't answer outside `intents.txt`, `facts.txt`, `kb.txt` and the skills, and says so when it doesn't know. ~81% of held-out phrases are classified correctly.
+- First build of the default GRU takes ~2 minutes on one core; the 4M GRU takes much longer. Training uses one thread per ensemble member.
+- Time zone comes from the OS (`date +%z`, Unix only) or `/tz`; otherwise it falls back to UTC and switches time-of-day greetings off.
+- The terminal UI uses `stty` for window size, falling back to `LINES`/`COLUMNS` or 112×36. Ctrl-C quits abruptly, but progress is saved after every message.
